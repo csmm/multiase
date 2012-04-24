@@ -1,4 +1,11 @@
 import pickle
+from ase.structure import molecule as mol
+from gpaw import GPAW
+from gpaw.occupations import FermiDirac
+#from ase.data.molecules import molecule, atoms as g2_atoms, g1
+from ase.data.g2_1 import atom_names as g22_atom_names 
+from ase.data.g2_1 import molecule_names as g22_molecule_names 
+from ase.data.g2_1 import data as g22_data
 class ScalarTest(object):
     def __init__(self):
         self.data = {}
@@ -33,13 +40,13 @@ class ScalarTest(object):
 
 class Atomization(ScalarTest):
     def __init__(self):
- #       from ase.data.molecules import molecule, atoms as g2_atoms, g1
         self.molecules = None #List of molecules
         self.atoms = None #Atom object ase-like
         self.calc = None  #Calculator gpaw-like
         self.energies = {}
         self.data = {}
         self.mae = 0.0
+        self.exp_data = None
     def get_all_energies(self):
         for atom in self.atoms:
             e = atom.get_potential_energy()
@@ -54,6 +61,13 @@ class Atomization(ScalarTest):
             for atom in system.get_chemical_symbols():
                 ae += self.energies[atom]
             self.add_data(system.name,ae,'sim')
+    def fill_data_experimental(self):   
+        for system in self.molecules:
+            ae = -1.0 * self.exp_data[system.name]['thermal correction']
+            for atom in system.get_chemical_symbols():
+                ae += self.exp_data[atom]['thermal correction']
+            self.add_data(system.name,ae,'exp')
+
     def write_energies(self,filename):
         f = open(filename,'wb')
         pickle.dump(self.energies, f)
@@ -78,30 +92,64 @@ class SimpleH2Atoms():
     def get_chemical_symbols(self):
         return ['H','H']
 ##atomization GPAW calculator
-class GPAWAtoms(name):
-    def __init__(self):
+class GPAWSystems():
+    def __init__(self,name, vacuum=6.0, h=0.17, xc='LDA',
+                 setups='paw', mode='fd'):
         self.name = name
-        return
-    def set_atoms():
-        return
-    def set_calculator():
-        return
-            
-names = ['H2']
+        self.system = mol(name)
+        self.system.center(vacuum=vacuum)
+        cell = self.system.get_cell()
+        self.h = h
+        self.system.set_cell((cell / (4 * h)).round() * 4 * h)
+        self.system.center()
+        self.xc = xc
+        self.setups = setups
+        self.mode = mode
+        self.calc = None
+    def setup_calculator(self):
+        hund = (len(self.system) == 1)
+        calc = GPAW(xc=self.xc,
+                    h=self.h,
+                    hund=hund,
+                    setups=self.setups,
+                    txt=self.name+'.txt',
+                    mode=self.mode,
+                    spinpol=True,
+                    occupations=FermiDirac(0,fixmagmom=True)
+                    )
+        return calc
+    def get_potential_energy(self):
+        self.system.set_calculator(self.setup_calculator())
+        try:
+            e = self.system.get_potential_energy()
+            self.system._del_calculator()
+        else:
+            e = 1000 #not converged value
+        return e
+    def get_chemical_symbols(self):
+        return self.system.get_chemical_symbols()
+
 
 test = Atomization()
-#setting first by hand or calling g22 or s22
-test.add_systems(names)
-test.molecules = [SimpleH2Atoms()]
-test.atoms = [SimpleH2Atoms()]
+#calling g22 or s22
+molecule_names = g22_molecule_names # ['H2,...]
+atom_names = g22_atom_names #['H',...]
+test.exp_data = g22_data
+
+test.add_systems(molecule_names)
+test.atoms = [GPAWSystems(name,h=0.17,vacuum=6.0,xc='PBE') 
+              for name in atom_names]
+test.molecules = [GPAWSystems(name,h=0.4,vacuum=6.0,xc='PBE') 
+                  for name in molecule_names]
+
+test.fill_data_experimental()
+print test.data
+stop
 #calculate
 test.get_all_energies()
-print test.energies
 test.write_energies('energies.pkl')
 test.fill_data_simulated()
-print test.data
 test.calculate_error()
-print test.data
 test.calculate_mae()
 test.write_data('data.pkl')
 
