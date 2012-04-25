@@ -6,6 +6,7 @@ from gpaw.occupations import FermiDirac
 from ase.data.g2_1 import atom_names as g22_atom_names 
 from ase.data.g2_1 import molecule_names as g22_molecule_names 
 from ase.data.g2_1 import data as g22_data
+import g2_1 as short_molecules_exp_data
 class ScalarTest(object):
     def __init__(self):
         self.data = {}
@@ -61,11 +62,10 @@ class Atomization(ScalarTest):
             for atom in system.get_chemical_symbols():
                 ae += self.energies[atom]
             self.add_data(system.name,ae,'sim')
-    def fill_data_experimental(self):   
+
+    def fill_data_experimental(self, factor_to_eV=1.0):
         for system in self.molecules:
-            ae = -1.0 * self.exp_data[system.name]['thermal correction']
-            for atom in system.get_chemical_symbols():
-                ae += self.exp_data[atom]['thermal correction']
+            ae = self.exp_data.get_atomization_energy(system.name) * factor_to_eV
             self.add_data(system.name,ae,'exp')
 
     def write_energies(self,filename):
@@ -91,6 +91,7 @@ class SimpleH2Atoms():
         return 1.0
     def get_chemical_symbols(self):
         return ['H','H']
+
 ##atomization GPAW calculator
 class GPAWSystems():
     def __init__(self,name, vacuum=6.0, h=0.17, xc='LDA',
@@ -118,33 +119,40 @@ class GPAWSystems():
                     occupations=FermiDirac(0,fixmagmom=True)
                     )
         return calc
+    
     def get_potential_energy(self):
         self.system.set_calculator(self.setup_calculator())
         try:
             e = self.system.get_potential_energy()
             self.system._del_calculator()
-        else:
+        except:
+            print "{} molecule not converged".format(self.name)
             e = 1000 #not converged value
         return e
+    
     def get_chemical_symbols(self):
         return self.system.get_chemical_symbols()
 
 
 test = Atomization()
 #calling g22 or s22
-molecule_names = g22_molecule_names # ['H2,...]
-atom_names = g22_atom_names #['H',...]
-test.exp_data = g22_data
+#molecule_names = g22_molecule_names # ['H2,...]
+#atom_names = g22_atom_names #['H',...]
+#test.exp_data = g22_data
+#molecule_names = ['CH3','CH4','OH','H2O','C2H2','C2H4','C2H6','CO']
+molecule_names = ['CH4']
+atom_names = ['H','C']
+test.exp_data = short_molecules_exp_data
 
 test.add_systems(molecule_names)
-test.atoms = [GPAWSystems(name,h=0.17,vacuum=6.0,xc='PBE') 
+test.atoms = [GPAWSystems(name,h=0.3,vacuum=2.0,xc='PBE') 
               for name in atom_names]
-test.molecules = [GPAWSystems(name,h=0.4,vacuum=6.0,xc='PBE') 
+test.molecules = [GPAWSystems(name,h=0.3,vacuum=2.0,xc='PBE') 
                   for name in molecule_names]
-
-test.fill_data_experimental()
+# input a string for dict or integer for lists
+print test.data 
+test.fill_data_experimental(factor_to_eV=0.0433641146392)
 print test.data
-stop
 #calculate
 test.get_all_energies()
 test.write_energies('energies.pkl')
