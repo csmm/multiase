@@ -3,10 +3,13 @@ from ase.structure import molecule as mol
 from gpaw import GPAW
 from gpaw.occupations import FermiDirac
 #from ase.data.molecules import molecule, atoms as g2_atoms, g1
-from ase.data.g2_1 import atom_names as g22_atom_names 
-from ase.data.g2_1 import molecule_names as g22_molecule_names 
-from ase.data.g2_1 import data as g22_data
-import g2_1 as short_molecules_exp_data
+#from ase.data.g2_1 import atom_names as g22_atom_names 
+#from ase.data.g2_1 import molecule_names as g22_molecule_names 
+#from ase.data.g2_1 import data as g22_data
+import g2_1 as exp_data
+
+#from ase.data import g2_1 as exp_data
+
 from energy import Atomization
 
 
@@ -63,7 +66,7 @@ def main():
 
     molecule_names = ['CH4']
     atom_names = ['H','C']
-    test.exp_data = short_molecules_exp_data
+    test.exp_data = exp_data
 
     test.add_systems(molecule_names)
     test.atoms = [GPAWSystems(name,h=0.3,vacuum=2.0,xc='PBE') 
