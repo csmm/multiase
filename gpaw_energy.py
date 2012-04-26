@@ -2,12 +2,8 @@ import pickle
 from ase.structure import molecule as mol
 from gpaw import GPAW
 from gpaw.occupations import FermiDirac
-#from ase.data.molecules import molecule, atoms as g2_atoms, g1
-#from ase.data.g2_1 import atom_names as g22_atom_names 
-#from ase.data.g2_1 import molecule_names as g22_molecule_names 
-#from ase.data.g2_1 import data as g22_data
-import g2_1 as exp_data
-
+import g2_1 as g22_exp_data
+import s22 as s22_sim_data
 #from ase.data import g2_1 as exp_data
 
 from energy import Atomization
@@ -57,23 +53,18 @@ class GPAWSystems():
 
 
 def main():
+    print "Test atomization"
     test = Atomization()
-    #calling g22 or s22
-    #molecule_names = g22_molecule_names # ['H2,...]
-    #atom_names = g22_atom_names #['H',...]
-    #test.exp_data = g22_data
-    #molecule_names = ['CH3','CH4','OH','H2O','C2H2','C2H4','C2H6','CO']
-
     molecule_names = ['CH4']
     atom_names = ['H','C']
-    test.exp_data = exp_data
+    test.ref_data = g22_exp_data
 
     test.add_systems(molecule_names)
     test.atoms = [GPAWSystems(name,h=0.3,vacuum=2.0,xc='PBE') 
                   for name in atom_names]
     test.molecules = [GPAWSystems(name,h=0.3,vacuum=2.0,xc='PBE') 
                       for name in molecule_names]
-    test.fill_data_experimental(factor_to_eV=0.0433641146392)
+    test.fill_data_reference(data_type='g22')
 
     test.get_all_energies()
     test.write_energies('energies.pkl')
@@ -84,6 +75,8 @@ def main():
     
     error = 5.64039227514 - test.mae
     print 'Test error: {0} eV'.format(error)
+
+
 
 if __name__ == "__main__":
     main()

@@ -1,22 +1,22 @@
 import pickle
-import g2_1 as exp_data
+import g2_1 as g22_exp_data
 
 class ScalarTest(object):
     def __init__(self):
         self.data = {}
         self.mae = 0.0
-    def add_systems(self,names): #it will be expanded to dyn error
+    def add_systems(self,names): 
         for name in names:
-            self.data[name] = {'exp':0.0,'sim':0.0,'err':0.0}
+            self.data[name] = {'ref':0.0,'sim':0.0,'err':0.0}
     def add_data(self, name, data, data_type):
-        """ Data types are 'exp' or 'sim' """
+        """ Data types are 'ref' or 'sim' """
         self.data[name][data_type] = data
     def calculate_error(self):
         for name, values in self.data.iteritems():
-            values['err'] = values['exp']-values['sim']
+            values['err'] = values['ref']-values['sim']
     def calculate_mae(self):
         for name, values in self.data.iteritems():
-            self.mae += abs(values['exp']-values['sim'])
+            self.mae += abs(values['ref']-values['sim'])
         self.mae /= len(self.data)
         print 'Mean absolute error is {0} eV'.format(self.mae)
     def write_data(self,filename):
@@ -41,7 +41,7 @@ class Atomization(ScalarTest):
         self.energies = {}
         self.data = {}
         self.mae = 0.0
-        self.exp_data = None
+        self.data_ref = None
     def get_all_energies(self):
         for atom in self.atoms:
             e = atom.get_potential_energy()
@@ -57,11 +57,17 @@ class Atomization(ScalarTest):
                 ae += self.energies[atom]
             self.add_data(system.name,ae,'sim')
 
-    def fill_data_experimental(self, factor_to_eV=1.0):
+    def fill_data_reference(self, data_type='g22'):
         for system in self.molecules:
-            ae = self.exp_data.get_atomization_energy(system.name) * factor_to_eV
-            self.add_data(system.name,ae,'exp')
-
+            if data_type == 'g22':
+                factor_to_eV=0.0433641146392
+                ae = self.ref_data.get_atomization_energy(system.name) * factor_to_eV
+            elif data_type == 's22':
+                ae = 1.0
+            else:
+                print "Data type not implemented"
+            self.add_data(system.name,ae,'ref')
+ 
     def write_energies(self,filename):
         f = open(filename,'wb')
         pickle.dump(self.energies, f)
@@ -75,6 +81,15 @@ class Atomization(ScalarTest):
         f = open(filename,'rb')
         self.energies = pickle.load(f)
         f.close()
+
+    def set_fragments_s22(self,atoms_type='ase'):
+        if atoms_type == 'ase':
+            f = 0
+        elif atoms_type =='test':
+            f = [ SimpleAtoms('Benzene',['C','H']), SimpleAtoms('Water',['H','O']) ]
+        else:
+            print "Atoms type not implemented"
+        return f
 
 ##simple atoms for testing
 class SimpleAtoms():        
@@ -92,13 +107,13 @@ def main():
     test = Atomization()
     molecule_names = ['CH4']
     atom_names = ['H','C']
-    test.exp_data = exp_data
+    test.ref_data = g22_exp_data
 
     test.add_systems(molecule_names)
     test.atoms = [ SimpleAtoms(name,[name]) for name in atom_names]
     test.molecules = [ SimpleAtoms(name,atom_names) for name in molecule_names]
 
-    test.fill_data_experimental(factor_to_eV=0.0433641146392)
+    test.fill_data_reference(data_type='g22')
     test.get_all_energies()
     test.write_energies('energies.pkl')
     test.fill_data_simulated()
@@ -114,6 +129,24 @@ def main():
     test_d = ScalarTest()
     test_d.load_data('data.pkl')
     test_d.calculate_mae()
+    error = 17.2206599701 - test.mae
+    print 'Test error: {0} eV'.format(error)
+
+    print "Test fragmentation with s22 set"
+    test_f = Atomization()
+    molecule_names = ['Benzene-water_complex']
+    test_f.add_systems(molecule_names)
+    test_f.molecules = [ SimpleAtoms(name,atom_names) for name in molecule_names]
+    test_f.atoms = test_f.set_fragments_s22(atoms_type='test')
+
+    test_f.fill_data_reference(data_type='s22')
+    test_f.get_all_energies()
+    test_f.write_energies('energies.pkl')
+    test_f.fill_data_simulated()
+    test_f.calculate_error()
+    test_f.calculate_mae()
+    test_f.write_data('data.pkl')
+
     error = 17.2206599701 - test.mae
     print 'Test error: {0} eV'.format(error)
 
