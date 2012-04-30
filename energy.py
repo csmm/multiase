@@ -1,5 +1,6 @@
 import pickle
 import g2_1 as g22_exp_data
+from s22 import data as s22_sim_data
 
 class ScalarTest(object):
     def __init__(self):
@@ -18,7 +19,7 @@ class ScalarTest(object):
         for name, values in self.data.iteritems():
             self.mae += abs(values['ref']-values['sim'])
         self.mae /= len(self.data)
-        print 'Mean absolute error is {0} eV'.format(self.mae)
+        #print 'Mean absolute error is {0} eV'.format(self.mae)
     def write_data(self,filename):
         f = open(filename,'wb')
         pickle.dump(self.data, f)
@@ -33,19 +34,21 @@ class ScalarTest(object):
         self.data = pickle.load(f)
         f.close()
 
-class Atomization(ScalarTest):
-    def __init__(self):
+class Fragmentation(ScalarTest):
+    def __init__(self,molecule_names):
         self.molecules = None #List of molecules
-        self.atoms = None #Atom object ase-like
+        self.fragments = None #Atom object ase-like
         self.calc = None  #Calculator gpaw-like
         self.energies = {}
         self.data = {}
         self.mae = 0.0
         self.data_ref = None
+        self.add_systems(molecule_names)
+
     def get_all_energies(self):
-        for atom in self.atoms:
-            e = atom.get_potential_energy()
-            self.energies[atom.get_chemical_symbols()[0]] = e
+        for fragment in set(self.fragments):
+            e = fragment.get_potential_energy()
+            self.energies[fragment.name] = e
         for system in self.molecules:
             e = system.get_potential_energy()
             self.energies[system.name] = e
@@ -53,20 +56,20 @@ class Atomization(ScalarTest):
     def fill_data_simulated(self):
         for system in self.molecules:
             ae = -1.0 * self.energies[system.name]
-            for atom in system.get_chemical_symbols():
-                ae += self.energies[atom]
+            for fragment in self.fragments:
+                ae += self.energies[fragment.name]
             self.add_data(system.name,ae,'sim')
 
     def fill_data_reference(self, data_type='g22'):
         for system in self.molecules:
             if data_type == 'g22':
                 factor_to_eV=0.0433641146392
-                ae = self.ref_data.get_atomization_energy(system.name) * factor_to_eV
+                e = g22_exp_data.get_atomization_energy(system.name) * factor_to_eV
             elif data_type == 's22':
-                ae = 1.0
+                e = s22_sim_data[system.name]['interaction energy CC']
             else:
                 print "Data type not implemented"
-            self.add_data(system.name,ae,'ref')
+            self.add_data(system.name,e,'ref')
  
     def write_energies(self,filename):
         f = open(filename,'wb')
@@ -76,50 +79,52 @@ class Atomization(ScalarTest):
         for k,v in self.energies.iteritems():
             out = str(k)+'\t'+str(v)+'\n'
             f.write(out)
-#        f.write('mae: {0}'.format(self.mae))
+
     def load_energies(self,filename):
         f = open(filename,'rb')
         self.energies = pickle.load(f)
         f.close()
 
-    def set_fragments_s22(self,atoms_type='ase'):
-        if atoms_type == 'ase':
-            f = 0
-        elif atoms_type =='test':
-            f = [ SimpleAtoms('Benzene',['C','H']), SimpleAtoms('Water',['H','O']) ]
-        else:
-            print "Atoms type not implemented"
-        return f
+#    def set_fragments_s22(self,atoms_type='ase'):
+#        if atoms_type == 'ase':
+#            f = 0
+#        elif atoms_type =='test':
+#            f = [ SimpleAtoms('Benzene',['C','H']), SimpleAtoms('Water',['H','O']) ]
+#        else:
+#            print "Atoms type not implemented"
+#        return f
 
 ##simple atoms for testing
+
+    def run(self):
+        self.get_all_energies()
+        self.write_energies('energies.pkl')
+        self.fill_data_simulated()
+        self.calculate_error()
+        self.calculate_mae()
+        self.write_data('data.pkl')
+
+        
 class SimpleAtoms():        
-    def __init__(self,name,chemical_symbols):
+    def __init__(self,name,fragment_list=None):
         self.name = name
-        self.chemical_symbols = chemical_symbols
+        self.fragment_list = fragment_list
         return
     def get_potential_energy(self):
         return 1.0
-    def get_chemical_symbols(self):
-        return self.chemical_symbols
+
 
 def main():
-    print "Test atomization"
-    test = Atomization()
+    print "Test atomization using exp data in g22 set"
     molecule_names = ['CH4']
-    atom_names = ['H','C']
-    test.ref_data = g22_exp_data
+    fragment_list = ['H','H','H','H','C']
+    test = Fragmentation(molecule_names)
 
-    test.add_systems(molecule_names)
-    test.atoms = [ SimpleAtoms(name,[name]) for name in atom_names]
-    test.molecules = [ SimpleAtoms(name,atom_names) for name in molecule_names]
+    test.fragments = [ SimpleAtoms(name) for name in set(fragment_list) ]
+    test.molecules = [ SimpleAtoms(name,fragment_list=fragment_list) for name in molecule_names ]
 
     test.fill_data_reference(data_type='g22')
-    test.get_all_energies()
-    test.write_energies('energies.pkl')
-    test.fill_data_simulated()
-    test.calculate_error()
-    test.calculate_mae()
-    test.write_data('data.pkl')
+    test.run()
 
     error = 17.2206599701 - test.mae
     print 'Test error: {0} eV'.format(error)
@@ -129,25 +134,21 @@ def main():
     test_d = ScalarTest()
     test_d.load_data('data.pkl')
     test_d.calculate_mae()
-    error = 17.2206599701 - test.mae
+    error = 17.2206599701 - test_d.mae
     print 'Test error: {0} eV'.format(error)
 
     print "Test fragmentation with s22 set"
-    test_f = Atomization()
     molecule_names = ['Benzene-water_complex']
-    test_f.add_systems(molecule_names)
-    test_f.molecules = [ SimpleAtoms(name,atom_names) for name in molecule_names]
-    test_f.atoms = test_f.set_fragments_s22(atoms_type='test')
+    fragment_names = ['Benzene','water']
+    test_f = Fragmentation(molecule_names)
+
+    test_f.molecules = [ SimpleAtoms(name) for name in molecule_names]
+    test_f.fragments = [ SimpleAtoms(name) for name in fragment_names]
 
     test_f.fill_data_reference(data_type='s22')
-    test_f.get_all_energies()
-    test_f.write_energies('energies.pkl')
-    test_f.fill_data_simulated()
-    test_f.calculate_error()
-    test_f.calculate_mae()
-    test_f.write_data('data.pkl')
+    test_f.run()
 
-    error = 17.2206599701 - test.mae
+    error =  1.1427 - test_f.mae
     print 'Test error: {0} eV'.format(error)
 
 #Print "Test load energies"
