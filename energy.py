@@ -62,6 +62,7 @@ class Fragmentation(ScalarTest):
             self.add_data(system.name,ae,'sim')
 
     def fill_data_reference(self, data_type='g22'):
+        """ Energies in eV"""
         for system in self.molecules:
             if data_type == 'g22':
                 to_eV=0.0433641146392
