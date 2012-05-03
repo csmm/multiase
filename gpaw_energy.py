@@ -8,6 +8,7 @@ from gpaw.cluster import Cluster
 from energy import Fragmentation
 
 from ase.data.s22 import data as s22_sim_data
+from ase.data.s22 import get_number_of_dimer_atoms
 ##atomization GPAW calculator
 class GPAWSystems():
     def __init__(self,name, atoms = None,vacuum=6.0, h=0.17, xc='PBE',
@@ -66,46 +67,44 @@ def main():
     test = Fragmentation(molecule_names)
     test.molecules = [GPAWSystems(name,h=0.3,vacuum=2.0,xc='PBE')
                       for name in molecule_names]
-
+    
     atom_names = []
     for gs in test.molecules:
         atom_names.extend(gs.system.get_chemical_symbols())
   
     test.fragments = [GPAWSystems(name,h=0.3,vacuum=2.0,xc='PBE') 
-                  for name in set(atom_names)]
+                      for name in set(atom_names)]
 
     test.fill_data_reference(data_type='g22')
-    test.run()
+    #test.run()
     
     error = 5.64039227514 - test.mae
     print 'Test error: {0} eV'.format(error)
 
     #TEST fragmentation
     print "Test fragmentation with s22 set"
-    molecule_names = ['Benzene-water_complex']
-    test_f = Fragmentation(molecule_names)
+    molecule = 'Ammonia_dimer'
+    fragment_names = [molecule+'_f1',molecule+'f2']
+    test_f = Fragmentation([molecule])
+    
+    sys = Atoms(s22_sim_data[molecule]['symbols'],
+                s22_sim_data[molecule]['positions'])
+    
+    test_f.molecules = [GPAWSystems(molecule,atoms=sys,
+                                    h=0.2, vacuum=3.0,
+                                    fragment_list=fragment_names)]
 
-    for molecule in molecule_names:
-        ss = Cluster(Atoms(s22_sim_data[molecule]['symbols'],
-                           s22_sim_data[molecule]['positions']))
-        # split the structures
-        s1 = ss.find_connected(0)
-        s1.name = 's1'
-        s2 = ss.find_connected(-1)
-        s2.name = 's2'
-        assert len(ss) == len(s1) + len(s2)    
+    n = s22_sim_data[molecule]['dimer atoms']
 
-
-        test_f.molecules = [ GPAWSystems(name,atoms=ss,h=0.6,vacuum=2.0,xc='PBE',
-                                         fragment_list=['s1','s2']) 
-                             for name in molecule_names]
-        test_f.fragments = [ GPAWSystems(a.name,atoms=a,h=0.4,vacuum=2.0) for a in [s1,s2]]
-
-#    test_f.fill_data_reference(data_type='s22')
-        test_f.run(write=True)
-
-        error =  1.1427 - test_f.mae
-        print 'Test error: {0} eV'.format(error)
+    atom_fragments = [ sys.copy()[range(n[0])], sys.copy()[range(n[0],n[0]+n[1])] ]
+    test_f.fragments = [ GPAWSystems(name,atoms=a,h=0.2, vacuum=3.0)
+                         for name,a in zip(fragment_names,atom_fragments)]
+        
+    test_f.fill_data_reference(data_type='s22')
+    test_f.run(write=True)
+        
+    error =  1.1427 - test_f.mae
+    print 'Test error: {0} eV'.format(error)
 
 
 
