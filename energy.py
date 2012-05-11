@@ -68,7 +68,7 @@ class Fragmentation(ScalarTest):
                 to_eV=0.0433641146392
                 e = g22_exp_data.get_atomization_energy(system.name) * to_eV
             elif data_type == 's22':
-                e = get_interaction_energy_s22(system.name)
+                e = -get_interaction_energy_s22(system.name)
             else:
                 print "Data type not implemented"
             self.add_data(system.name,e,'ref')
@@ -138,9 +138,9 @@ def main():
     test_f.fragments = [ SimpleAtoms(name) for name in set(fragment_names)]
 
     test_f.fill_data_reference(data_type='s22')
-    test_f.run(write=False)
+    test_f.run(write=True)
 
-    error =  1.1427 - test_f.mae
+    error =  0.8573 - test_f.mae
     print 'Test error: {0} eV'.format(error)
 
 #Print "Test load energies"
