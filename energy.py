@@ -1,7 +1,7 @@
 import pickle
 import g2_1 as g22_exp_data
-from s22 import data as s22_sim_data
-from s22 import get_interaction_energy_s22
+from ase.data.s22 import data as s22_sim_data
+from ase.data.s22 import get_interaction_energy_s22
 
 class ScalarTest(object):
     def __init__(self):
