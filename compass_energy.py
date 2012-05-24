@@ -91,8 +91,6 @@ def test_s22():
 		#'Indole-benzene_T-shape_complex',
 		'Phenol_dimer'
 		]
-
-		
     
     for moleculeName in testSet:
         data = s22.data[moleculeName]
@@ -138,9 +136,6 @@ def testSingle():
 
     print 'Relaxed:', minimize
     print test_f.data
-    
-    import ase.io
-    ase.io.write('phenol.xyl', test_f.
 
 
 if __name__ == "__main__":
