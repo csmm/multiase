@@ -199,7 +199,7 @@ def read(infile):
 		
 		alreadyDone += [key, key2, key3]
 		if None in (M2, M3):
-			print 'Angle-angle: not all combinations found for', i, j, k, l
+			#print 'Angle-angle: not all combinations found for', i, j, k, l
 			continue
 		
 		for a, b, c, d in typeCombinations((i, j, k, l), 'torsion', 'angle'):

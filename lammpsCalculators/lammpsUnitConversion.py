@@ -1,5 +1,6 @@
 from __future__ import division
 from scipy.constants import *
+import ase.units
 
 # metal style:
 #mass = grams/mole
@@ -19,26 +20,17 @@ from scipy.constants import *
 
 mole = N_A
 
-class LAMMPSUnitConverter:
-	def __init__(self, units):
-		self.units = units
-		
-	def toASE(self, value, quantity):
-		return toASE(value, quantity, self.units, 'ASE')
-		
-	def fromASE(self, value, quantity):
-		return convert(value, quantity, 'ASE', self.units)
-
 def convert(value, quantity, fromUnits, toUnits):
 	return unitSets[fromUnits][quantity]/unitSets[toUnits][quantity] * value
-
-def toASE(value, quantity, fromUnits):
-	return convert(value, quantity, fromUnits, 'ASE')
+	
 unitSets = {}
 
 unitSets['ASE'] = dict(
 	mass = gram/mole,
+	distance = angstrom,
+	time = 1/ase.units.second,
 	energy = eV,
+	velocity = angstrom/(1/ase.units.second),
 	force = eV/angstrom,
 	pressure = giga       #GPa
 	)
@@ -62,7 +54,7 @@ unitSets['metal'] = dict(
 unitSets['real'] = dict(
 	mass          = gram/mole,
 	distance      = angstrom,
-	time          = nano,    # nanoseconds
+	time          = femto,    # femtoseconds
 	energy        = kilo*calorie/mole,   # kcal/mole
 	velocity      = angstrom/femto,       # Angstroms/femtosecond
 	force         = kilo*calorie/(mole*angstrom),
@@ -76,4 +68,4 @@ unitSets['real'] = dict(
 	
 
 if __name__ == '__main__':
-	print toMetal(15, 'energy', 'real')
+	print convert(ase.units.fs, 'time', 'ASE', 'real')

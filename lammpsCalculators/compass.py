@@ -1,18 +1,21 @@
 from lammpsBase import LAMMPSBase
 from ase.data import covalent_radii
 from ase.atoms import Atoms
-from ase.atom import Atom
+from ase.atom import Atom, atomproperty
+import ase.atom
 from itertools import combinations, product, permutations
 import readFrc, compassTypes
 import new
+import numpy as np
 #import numpy as np
+
+def add_bonds(bonds, atoms):
+	atoms.bonds = [Bond(bond) for bond in bonds]
 
 class COMPASS(LAMMPSBase):
 	
-	def __init__(self, label='compass', ff_file_path='compass.frc', pair_cutoff=10.0, bonds=None, **kwargs):
+	def __init__(self, label='compass', ff_file_path='compass.frc', pair_cutoff=10.0, **kwargs):
 		LAMMPSBase.__init__(self, label, files = [ff_file_path], **kwargs)
-		
-		self.bonds = bonds
 		
 		self.parameters.units          = 'real'
 		self.parameters.pair_style     = 'lj/class2/coul/cut %f' % pair_cutoff
@@ -35,7 +38,10 @@ class COMPASS(LAMMPSBase):
 		self.data.clear()
 		
 		atoms = self.atoms
-		if not self.bonds: self.bonds = self.detectBonds()
+		if hasattr(atoms, 'bonds'):
+			self.bonds = atoms.bonds
+		else:
+			self.bonds = self.detectBonds()
 		bonds = self.bonds
 		angles    = self.findAngles()
 		dihedrals = self.findDihedrals()
@@ -44,11 +50,11 @@ class COMPASS(LAMMPSBase):
 		ffParameters = self.ff_parameters
 		
 		# Add a compass type property to ASE atoms
-		atoms.compass_types = [
-			compassTypes.getType(a, self.atomNeighbors(a)) for a in atoms]
+		atoms.new_array('compass_types', 
+			np.array([compassTypes.getType(a, self.atomNeighbors(a)) for a in atoms]))
 		
-		def get_compass_type(self): return self.atoms.compass_types[self.index]
-		Atom.compass_type = property(new.instancemethod(get_compass_type, None, Atom))
+		ase.atom.names['compass_type'] = ('compass_types', '')
+		ase.atom.Atom.compass_type = ase.atom.atomproperty('compass_type', 'COMPASS atom type')
 		
 		# Calculate charges
 		for atom in atoms:

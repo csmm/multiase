@@ -14,7 +14,7 @@ import numpy as np
 import traceback
 
 ##atomization GPAW calculator
-class ReaxFFSystem():
+class COMPASSSystem():
     def __init__(self,name, atoms = None,vacuum=6.0, h=0.2, fragment_list=None, minimize = False):
         self.name = name
         if atoms:
@@ -98,9 +98,9 @@ def test_s22():
         dimer1End = data['dimer atoms'][0]
         frag1Atoms = atoms.copy()[:dimer1End]
         frag2Atoms = atoms.copy()[dimer1End:]
-        fragment1 = ReaxFFSystem(moleculeName + '_f1', frag1Atoms, minimize = minimize)
-        fragment2 = ReaxFFSystem(moleculeName + '_f2', frag2Atoms, minimize = minimize)
-        system = ReaxFFSystem(moleculeName, atoms, minimize = minimize,
+        fragment1 = COMPASSSystem(moleculeName + '_f1', frag1Atoms, minimize = minimize)
+        fragment2 = COMPASSSystem(moleculeName + '_f2', frag2Atoms, minimize = minimize)
+        system = COMPASSSystem(moleculeName, atoms, minimize = minimize,
                     fragment_list = [fragment1.name, fragment2.name])
         fragTest.molecules.append(system)
         fragTest.fragments += [fragment1, fragment2]
@@ -128,7 +128,7 @@ def testSingle():
     n = s22_sim_data[molecule]['dimer atoms']
 
     atom_fragments = [ sys.copy()[range(n[0])], sys.copy()[range(n[0],n[0]+n[1])] ]
-    test_f.fragments = [ ReaxFFSystem(name,atoms=a, minimize = minimize)
+    test_f.fragments = [ COMPASSSystem(name,atoms=a, minimize = minimize)
                          for name,a in zip(fragment_names,atom_fragments)]
         
     test_f.fill_data_reference(data_type='s22')

@@ -61,6 +61,8 @@ class LAMMPSParameters:
             
         self.minimize       = pars.get('minimize')
         self.run            = pars.get('run')
+        self.timestep       = pars.get('timestep')
+        self.fix            = pars.get('fix')
 
 class LAMMPSData:
     def __init__(self):
@@ -105,7 +107,7 @@ class LAMMPSBase:
             Force use of a triclinic cell in LAMMPS, even if the cell is
             a perfect parallelepiped.
         """
-
+  
         self.label = label
         self.parameters = LAMMPSParameters(**parameters)
         self.data = LAMMPSData()
@@ -152,6 +154,10 @@ class LAMMPSBase:
         
         for f in files:
             shutil.copy(f, os.path.join(self.tmp_dir, f))
+            
+        ###
+        self.keep_tmp_files = True
+        ###
 
     def clean(self, force=False):
         self._lmp_end()
@@ -174,15 +180,42 @@ class LAMMPSBase:
         tc = self.thermo_content[-1]
         stress =  np.array([tc[i] for i in ('pxx','pyy','pzz',
                                          'pyz','pxz','pxy')])
-        lammpsUnitConversion.toASE(stress, 'stress', self.parameters.units)
+        return lammpsUnitConversion.toASE(stress, 'stress', self.parameters.units)
 
     def update(self, atoms):
         if not hasattr(self,'atoms') or self.atoms != atoms:
             self.atoms = atoms.copy()
             self.prepare_calculation()
             self.calculate()
-            
+    
+    def minimize(self, atoms, etol=0, ftol=0, maxeval=1000, maxiter=1000000):
+        if etol == 0 and ftol == 0: 
+            raise RuntimeError('Specify at least one tolerance value!')
+        
+        ftol = self.from_ase_units(ftol, 'force')
+        
+        self.parameters.minimize = '%f %f %f %f' % (etol, ftol, maxeval, maxiter)
+        self.atoms = atoms.copy()
+        self.prepare_calculation()
+        self.calculate()
+        self.parameters.minimize = None
+        return self.atoms.positions
+
+        
+    def molecular_dynamics(self, atoms, timestep, nsteps, fix):
+        self.parameters.fix = fix
+        self.parameters.timestep = str(self.from_ase_units(timestep, 'time'))
+        self.parameters.run = str(nsteps)
+        self.atoms = atoms.copy()
+        self.prepare_calculation()
+        self.calculate()
+        self.parameters.fix = None
+        self.parameters.timestep = None
+        self.parameters.run = None
+        return self.atoms.positions, self.atoms.get_momenta()
+    
     def prepare_calculation(self):
+        """ Implement this method in subclasses """
         raise NotImplementedException()
 
     def calculate(self):        
@@ -213,7 +246,7 @@ class LAMMPSBase:
             return self._lmp_handle.wait()
         
     def run(self):
-        """Method which explicitely runs LAMMPS."""
+        """Method which explicitly runs LAMMPS."""
 
         self.calls += 1
 
@@ -387,7 +420,8 @@ class LAMMPSBase:
         
         # Atoms
         charges = self.atoms.get_charges()
-        positions = p.pos_to_lammps(self.atoms.get_positions())
+        lammps_positions = p.pos_to_lammps(self.atoms.get_positions())
+        positions = self.from_ase_units(lammps_positions, 'distance')
         if self.parameters.atom_style == 'full':
             table = [[tp, '1', a.charge, a.x, a.y, a.z]
                 for tp, a in zip(self.data.atom_types, self.atoms)]
@@ -406,6 +440,11 @@ class LAMMPSBase:
             print_table('Dihedrals', self.data.dihedrals)
         if data.impropers:
             print_table('Impropers', self.data.impropers)
+        
+        if self.atoms.has('momenta'):
+            vel = self.atoms.get_velocities()
+            lammps_velocities = self.from_ase_units(vel, 'velocity')
+            print_table('Velocities', lammps_velocities)
         
         if close_file:
             f.close()
@@ -436,7 +475,7 @@ class LAMMPSBase:
         pbc = self.atoms.get_pbc()
         f.write('units %s \n' % parameters.units)
         f.write('boundary %c %c %c \n' % tuple('sp'[x] for x in pbc))
-        f.write('atom_modify sort 0 0.0 \n')
+        #f.write('atom_modify sort 0 0.0 \n')
         if parameters.neighbor:
             f.write('neighbor %s \n' % (parameters.neighbor))
         if parameters.newton:
@@ -467,18 +506,25 @@ class LAMMPSBase:
         # Extra pair coeffs
         for line in parameters.pair_coeffs:
             f.write('pair_coeff %s \n' % line)
+        
+        if parameters.run: dumpfreq = parameters.run
+        else: dumpfreq = '999999999'
+
    
-        f.write('\n### run\n' +
-                'fix fix_nve all nve\n' +
-                ('dump dump_all all custom 1 %s id type x y z vx vy vz fx fy fz\n' % lammps_trj) )
+        f.write('\n### run\n')
+        f.write('dump dump_all all custom %s %s id type x y z vx vy vz fx fy fz\n' % 
+                (dumpfreq, lammps_trj) )
         f.write(('thermo_style custom %s\n' +
                 'thermo_modify flush yes\n' +
                 'thermo 1\n') % (' '.join(self._custom_thermo_args)))
-
+                
         if parameters.minimize:
             f.write('minimize %s\n' % parameters.minimize)
         if parameters.run:
+            f.write('fix fix_all %s\n' % parameters.fix)
+            f.write('timestep %s\n' % parameters.timestep)
             f.write('run %s\n' % parameters.run)
+            dumpfreq = parameters.timestep
         if not (parameters.minimize or parameters.run):
             f.write('run 0\n')
 
@@ -488,6 +534,7 @@ class LAMMPSBase:
         if close_in_file:
             f.close()
 
+            
     def read_lammps_log(self, lammps_log=None, PotEng_first=False):
         """Method which reads a LAMMPS output log file."""
 
@@ -524,15 +571,15 @@ class LAMMPSBase:
 
         self.thermo_content = thermo_content
 
+        
     def read_lammps_trj(self, lammps_trj=None, set_atoms=False):
         """Method which reads a LAMMPS dump file."""
         if (lammps_trj == None):
             lammps_trj = self.label + '.lammpstrj'
-
+      
         f = paropen(lammps_trj, 'r')
         while True:
             line = f.readline()
-
             if not line:
                 break
 
@@ -541,7 +588,9 @@ class LAMMPSBase:
                 n_atoms = 0
                 lo = [] ; hi = [] ; tilt = []
                 id = [] ; type = []
-                positions = [] ; velocities = [] ; forces = []
+                positions  = np.empty((len(self.atoms), 3)) * np.nan
+                forces     = np.empty((len(self.atoms), 3)) * np.nan
+                velocities = np.empty((len(self.atoms), 3)) * np.nan
 
             if 'ITEM: NUMBER OF ATOMS' in line:
                 line = f.readline()
@@ -560,64 +609,36 @@ class LAMMPSBase:
             
             if 'ITEM: ATOMS' in line:
                 # (reliably) identify values by labels behind "ITEM: ATOMS" - requires >=lammps-7Jul09
-                # create corresponding index dictionary before iterating over atoms to (hopefully) speed up lookups...
                 atom_attributes = {}
                 for (i, x) in enumerate(line.split()[2:]):
                     atom_attributes[x] = i
                 for n in range(n_atoms):
                     line = f.readline()
                     fields = line.split()
-                    id.append( int(fields[atom_attributes['id']]) )
-                    type.append( int(fields[atom_attributes['type']]) )
-                    positions.append( [ float(fields[atom_attributes[x]]) for x in ['x', 'y', 'z'] ] )
-                    velocities.append( [ float(fields[atom_attributes[x]]) for x in ['vx', 'vy', 'vz'] ] )
-                    forces.append( [ float(fields[atom_attributes[x]]) for x in ['fx', 'fy', 'fz'] ] )
+                    id = int(fields[atom_attributes['id']])
+                    
+                    position = [ float(fields[atom_attributes[x]]) for x in ['x', 'y', 'z'] ]
+                    velocity = [ float(fields[atom_attributes[x]]) for x in ['vx', 'vy', 'vz'] ]
+                    force    = [ float(fields[atom_attributes[x]]) for x in ['fx', 'fy', 'fz'] ]
+                    
+                    rotate = self.prism.pos_to_ase
+                    positions[id-1]  = rotate(self.to_ase_units(np.array(position), 'distance'))
+                    velocities[id-1] = rotate(self.to_ase_units(np.array(velocity), 'velocity'))
+                    forces[id-1]     = rotate(self.to_ase_units(np.array(force), 'force'))
         f.close()
+        
+        if self.parameters.minimize or self.parameters.run:
+            # this was a dynamics run
+            self.atoms.set_positions(positions)
+            self.atoms.set_velocities(velocities)
+        
+        self.forces = forces
 
-        # determine cell tilt (triclinic case!)
-        if (len(tilt) >= 3):
-            # for >=lammps-7Jul09 use labels behind "ITEM: BOX BOUNDS" to assign tilt (vector) elements ...
-            if (len(tilt_items) >= 3):
-                xy = tilt[tilt_items.index('xy')]
-                xz = tilt[tilt_items.index('xz')]
-                yz = tilt[tilt_items.index('yz')]
-            # ... otherwise assume default order in 3rd column (if the latter was present)
-            else:
-                xy = tilt[0]
-                xz = tilt[1]
-                yz = tilt[2]
-        else:
-            xy = xz = yz = 0
-        xhilo = (hi[0] - lo[0]) - xy - xz
-        yhilo = (hi[1] - lo[1]) - yz
-        zhilo = (hi[2] - lo[2])
-    
-        cell = [[xhilo,0,0],[xy,yhilo,0],[xz,yz,zhilo]]
+    def to_ase_units(self, value, quantity):
+        return lammpsUnitConversion.convert(value, quantity, self.parameters.units, 'ASE')
 
-        # assume that LAMMPS does not reorder atoms internally
-        cell_atoms = np.array(cell)
-        type_atoms = np.array(type)
-
-        if self.atoms:
-            cell_atoms = self.atoms.get_cell()
-
-            # BEWARE: reconstructing the rotation from the LAMMPS output trajectory file
-            #         fails in case of shrink wrapping for a non-periodic direction
-            # -> hence rather obtain rotation from prism object used to generate the LAMMPS input
-            #rotation_lammps2ase = np.dot(np.linalg.inv(np.array(cell)), cell_atoms)
-            rotation_lammps2ase = np.linalg.inv(self.prism.R)
-
-            type_atoms = self.atoms.get_atomic_numbers()
-            positions_atoms = np.array( [np.dot(np.array(r), rotation_lammps2ase) for r in positions] )
-            velocities_atoms = np.array( [np.dot(np.array(v), rotation_lammps2ase) for v in velocities] )
-            forces_atoms = np.array( [np.dot(np.array(f), rotation_lammps2ase) for f in forces] )
-
-        if (set_atoms):
-            # assume periodic boundary conditions here (like also below in write_lammps)
-            self.atoms = Atoms(type_atoms, positions=positions_atoms, cell=cell_atoms)
-
-        self.forces = forces_atoms
-
+    def from_ase_units(self, value, quantity):
+        return lammpsUnitConversion.convert(value, quantity, 'ASE', self.parameters.units)
 
 
 class special_tee:
@@ -682,6 +703,7 @@ class prism:
                          (xyp, yhi, 0),
                          (xzp, yzp, zhi)))
         self.R = np.dot(np.linalg.inv(cell), Apre)
+        self.Rinv = np.linalg.inv(self.R)
 
         # Actual lammps cell may be different from what is used to create R
         def fold(vec, pvec, i):
@@ -711,7 +733,10 @@ class prism:
 
     def pos_to_lammps(self, position):
         return np.dot(position, self.R)
-        
+    
+    def pos_to_ase(self, position):
+        return np.dot(position, self.Rinv)
+    
     def is_skewed(self):
         acc = self.acc
         prism = self.get_lammps_prism()
