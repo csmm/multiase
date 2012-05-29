@@ -5,9 +5,7 @@ from ase.atom import Atom, atomproperty
 import ase.atom
 from itertools import combinations, product, permutations
 import readFrc, compassTypes
-import new
 import numpy as np
-#import numpy as np
 
 class COMPASS(LAMMPSBase):
 	

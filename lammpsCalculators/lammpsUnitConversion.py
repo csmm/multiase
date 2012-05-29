@@ -6,8 +6,7 @@ mole = N_A
 
 def convert(value, quantity, fromUnits, toUnits):
 	return unitSets[fromUnits][quantity]/unitSets[toUnits][quantity] * value
-def toASE(value, quantity, fromUnits):
-	return convert(value, quantity, fromUnits, 'ASE')
+	
 unitSets = {}
 
 unitSets['ASE'] = dict(
