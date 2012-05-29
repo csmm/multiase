@@ -92,7 +92,7 @@ class COMPASS(LAMMPSBase):
 					actualType = actualType[::-1]
 				coeffs = dataTable.get(actualType)
 				if coeffs == None:
-					print 'Warning: no {} coeffs for {}'.format(title, actualType)
+					print 'Warning: no {0} coeffs for {1}'.format(title, actualType)
 					coeffs = dataTable['empty']
 				data.append(coeffs)
 			return dict(title=title, data=data)
@@ -128,7 +128,7 @@ class COMPASS(LAMMPSBase):
 					if coeffs:
 						break
 				if not coeffs:
-					print 'Warning: no {} coeffs for {}'.format(title, actualType)
+					print 'Warning: no {0} coeffs for {1}'.format(title, actualType)
 					coeffs = dataTable['empty']
 				data.append(coeffs)
 			return dict(title=title, data=data)
