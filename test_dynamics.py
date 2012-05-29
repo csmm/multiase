@@ -6,6 +6,7 @@ from ase.data import s22
 from ase import units
 import numpy as np
 import ase.io
+from ase.io.trajectory import PickleTrajectory
 
 def get_s22_system(name):
 	moldata = s22.data[name]
@@ -33,13 +34,12 @@ optimizer.run()
 print atoms.positions
 
 atoms.calc = ReaxFF(specorder = ('C', 'H', 'O', 'N', 'S'))
-dyn = LAMMPS_NVT(atoms, 1*units.fs, 100)
-dyn.run(1000)
-print atoms.positions
+dyn = LAMMPS_NVT(atoms, 1*units.fs, 100, trajectory='test.traj', traj_interval = 2)
+dyn.run(5)
 
 atoms.calc = COMPASS()
-dyn.run(10000)
+dyn.run(10)
 
-ase.io.write('test.xyz', atoms)
+trj = PickleTrajectory('test.traj', 'r')
 
-print atoms.positions
+for t in trj: print t.positions

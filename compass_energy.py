@@ -109,10 +109,9 @@ def test_s22():
     fragTest.run(write=True)
     
 
-def testSingle(): 
+def testSingle(molecule = "Methane_dimer"): 
     #TEST fragmentation
     print "Test fragmentation with s22 set"
-    molecule = 'Methane_dimer'
     fragment_names = [molecule+'_f1',molecule+'_f2']
     test_f = Fragmentation([molecule])
     
@@ -122,7 +121,7 @@ def testSingle():
     sys = Atoms(s22_sim_data[molecule]['symbols'],
                 s22_sim_data[molecule]['positions'])
         
-    test_f.molecules = [ReaxFFSystem(molecule,atoms=sys,
+    test_f.molecules = [COMPASSSystem(molecule,atoms=sys,
                                     fragment_list=fragment_names, minimize=minimize)]
 
     n = s22_sim_data[molecule]['dimer atoms']

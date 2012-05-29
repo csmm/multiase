@@ -2,14 +2,20 @@ from lammpsBase import LAMMPSBase
 
 class ReaxFF(LAMMPSBase):
 	
-	def __init__(self, label='reaxff', specorder=None, ff_file_path=None, **kwargs):
+	def __init__(self, label='reaxff', specorder=None, ff_file_path='ffield.reax', implementation='Fortran', **kwargs):
 		
-		LAMMPSBase.__init__(self, label, files = ['ffield.reax'], **kwargs)
+		LAMMPSBase.__init__(self, label, **kwargs)
 		
 		self.specorder = specorder
 		self.parameters.atom_style = 'charge'
 		self.parameters.pair_style = 'reax'
+		if implementation == 'C':
+			self.parameters.pair_style += '/c NULL'
+			self.parameters.extra_cmds.append('fix qeq all qeq/reax 1 0.0 10.0 1.0e-6 reax/c')
+		
 		self.parameters.units      = 'real'
+		
+		self.use_ff_file(ff_file_path, 'ffield.reax')
 		
 	def prepare_calculation(self):
 		self.data.clear()

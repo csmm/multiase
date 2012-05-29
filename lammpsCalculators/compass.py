@@ -9,13 +9,10 @@ import new
 import numpy as np
 #import numpy as np
 
-def add_bonds(bonds, atoms):
-	atoms.bonds = [Bond(bond) for bond in bonds]
-
 class COMPASS(LAMMPSBase):
 	
 	def __init__(self, label='compass', ff_file_path='compass.frc', pair_cutoff=10.0, **kwargs):
-		LAMMPSBase.__init__(self, label, files = [ff_file_path], **kwargs)
+		LAMMPSBase.__init__(self, label, **kwargs)
 		
 		self.parameters.units          = 'real'
 		self.parameters.pair_style     = 'lj/class2/coul/cut %f' % pair_cutoff
@@ -25,12 +22,15 @@ class COMPASS(LAMMPSBase):
 		self.parameters.improper_style = 'class2'
 		
 		# Read force field file
+		self.use_ff_file(ff_file_path)
 		self.ff_parameters = readFrc.read(open(ff_file_path))
 		
 		# TODO
 		# pair_modify     tail yes
 		# special_bonds   lj/coul 0.0 0.0 1.0 dihedral yes	
 	
+	def set_bonds(self, bonds):
+		self.raw_bonds = [(bond[0].index, bond[1].index) for bond in bonds]
 	
 	def prepare_calculation(self):
 		""" Fill self.data """
@@ -38,8 +38,9 @@ class COMPASS(LAMMPSBase):
 		self.data.clear()
 		
 		atoms = self.atoms
-		if hasattr(atoms, 'bonds'):
-			self.bonds = atoms.bonds
+		
+		if hasattr(self, 'raw_bonds'):
+			self.bonds = [Bond((self.atoms[b[0]], self.atoms[b[1]])) for b in self.raw_bonds]
 		else:
 			self.bonds = self.detectBonds()
 		bonds = self.bonds
@@ -50,11 +51,13 @@ class COMPASS(LAMMPSBase):
 		ffParameters = self.ff_parameters
 		
 		# Add a compass type property to ASE atoms
-		atoms.new_array('compass_types', 
-			np.array([compassTypes.getType(a, self.atomNeighbors(a)) for a in atoms]))
+		if not atoms.has('compass_types'):
+			atoms.new_array('compass_types', 
+				np.array([compassTypes.getType(a, self.atomNeighbors(a)) for a in atoms]))
 		
 		ase.atom.names['compass_type'] = ('compass_types', '')
 		ase.atom.Atom.compass_type = ase.atom.atomproperty('compass_type', 'COMPASS atom type')
+		
 		
 		# Calculate charges
 		for atom in atoms:
@@ -168,6 +171,11 @@ class COMPASS(LAMMPSBase):
 		# Masses
 		massDict = dict((a.compass_type, a.mass) for a in atoms)
 		self.data.masses = [massDict[tp] for tp in atomTypes]
+		
+		# Clean up
+		del Atom.compass_type
+		del ase.atom.names['compass_type']
+		
 	
 	
 	def detectBonds(self):

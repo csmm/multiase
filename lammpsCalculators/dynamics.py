@@ -1,4 +1,5 @@
 from ase.optimize.optimize import Dynamics
+from ase.io.trajectory import PickleTrajectory
 
 class LAMMPSOptimizer(Dynamics):
 	""" Geometry optimizer for LAMMPS. works only with LAMMPS calculators """
@@ -6,15 +7,15 @@ class LAMMPSOptimizer(Dynamics):
 		Dynamics.__init__(self, atoms, logfile, trajectory)
 		
 	def run(self, fmax=0.05, steps=1e8):
-		positions = self.atoms.calc.minimize(self.atoms, ftol=fmax, maxeval=steps)
-		self.atoms.positions = positions
+		self.atoms.calc.minimize(self.atoms, ftol=fmax, maxeval=steps)
 
 		
 class LAMMPSMolecularDynamics(Dynamics):
 	""" Base class for molecular dynamics with LAMMPS. Requires a LAMMPS calculator. """
 	def __init__(self, atoms, timestep, integrator='verlet',
-				trajectory=None, logfile=None, restart=None, loginterval=1):
-		Dynamics.__init__(self, atoms, logfile, trajectory)
+				trajectory=None, traj_interval=1000, logfile=None, restart=None, loginterval=1):
+		Dynamics.__init__(self, atoms, logfile, None)
+		
 		
 		self.dt = timestep
 		
@@ -23,29 +24,47 @@ class LAMMPSMolecularDynamics(Dynamics):
 		else:
 			raise RuntimeError('Unknown integrator: %s' % thermostat)
 		
+		if trajectory is not None:
+			if isinstance(trajectory, str):
+				trajectory = PickleTrajectory(trajectory, 'w', atoms)
+			self.attach(trajectory, interval=traj_interval)
+			
 		self.fix = None
-	
 		
 	def run(self, steps=50):
-		positions, momenta = self.atoms.calc.molecular_dynamics(
-									self.atoms, self.dt, steps, 'all '+self.fix)
-		self.atoms.positions = positions
-		self.atoms.set_momenta(momenta)
-		
+		self.nsteps = 0
+		fix = 'all '+self.fix
+		calculation = self.atoms.calc.molecular_dynamics(self.atoms, self.dt, fix)
+		calculation.next()
+		for target_step in xrange(0, steps+1):
+			for function, interval, args, kwargs in self.observers:
+				if target_step % interval == 0:
+					if target_step > self.nsteps:
+						# Calculate up to nsteps
+						calculation.send(target_step - self.nsteps)
+						self.nsteps = target_step
+					function(*args, **kwargs)
+					
+		if target_step > self.nsteps:
+			calculation.send(target_step - self.nsteps)
+		try:
+			calculation.send(None)
+		except StopIteration:
+			pass
+	
 
 class LAMMPS_NVE(LAMMPSMolecularDynamics):
 	""" Microcanonical ensemble """
-	def __init__(self, atoms, timestep, integrator='verlet',
-				trajectory=None, logfile=None, loginterval=1):
-		LAMMPSMolecularDynamics.__init__(self, atoms, timestep, integrator, trajectory, logfile, loginterval)
+	def __init__(self, atoms, timestep, **kwargs):
+		LAMMPSMolecularDynamics.__init__(self, atoms, timestep, **kwargs)
 		
 		self.fix = 'nve'
 		
 class LAMMPS_NVT(LAMMPSMolecularDynamics):
 	""" Constant temperature calculations with Nose-Hoover or Berendsen """
 	def __init__(self, atoms, timestep, temperature, t_damp=100, thermostat='Nose-Hoover',
-				integrator='verlet', trajectory=None, logfile=None, loginterval=1):
-		LAMMPSMolecularDynamics.__init__(self, atoms, timestep, integrator, trajectory, logfile, loginterval)
+				**kwargs):
+		LAMMPSMolecularDynamics.__init__(self, atoms, timestep, **kwargs)
 		
 		if thermostat == 'Nose-Hoover':
 			cmd = 'nvt temp'
