@@ -72,7 +72,7 @@ def plot_oh(path,md_type,title,t0_histo,bin_histo,write=False):
     for atoms in traj:
         bonds = [ (o,h,atoms.get_distance(o,h,mic=True)) 
                   for o1,h in bonds_pva for o in o_index]
-        bonds_pva_traj = [ d for o,h,d in bonds if d < 1.1 ]
+        bonds_pva_traj = [ d for o,h,d in bonds if d < 1.2 ]
         assert len(bonds_pva_traj) == no
         bonds_oh = [ d for o,h,d in bonds if d <= 2.0]
         bonds_no_pva =  [ d for d in bonds_oh if d > 1.1]
@@ -104,31 +104,34 @@ def plot_oh(path,md_type,title,t0_histo,bin_histo,write=False):
         plt.savefig(pp, format='pdf')
     return 
 
-verlet=True
-berendsen =False
+
+verlet= True
+berendsen = False
 write = True
 
 if verlet:
-    path_traj = './NVE/'
+    temp = '500K'
+    path_traj = './NVE/'+temp+'/'
     title = 'NVE Verlet 1nm PVA'
     md_type = 'verlet'
-    t0_histo = 400
+    t0_histo = 2000
+    multipage = md_type+'_'+temp+'.pdf'
+
 if berendsen:
     path_traj = './NVT/berendsen/'
     title = 'NVT berendsen 1nm PVA'
     md_type = 'berendsen'
     t0_histo = 2000
-multipage = md_type+'.pdf'
+    multipage = md_type+'.pdf'
 bin_histo = 20
 
 pp = PdfPages(multipage)
 plot_energies(path_traj,md_type,title,t0_histo, bin_histo,
               write=write)
 
-
 bin_histo = 10
 plot_oh(path_traj,md_type,title,t0_histo, bin_histo,
         write=write)
 
-#plt.show()
+plt.show()
 pp.close()
