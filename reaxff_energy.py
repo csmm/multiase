@@ -1,8 +1,8 @@
 import pickle
 from ase.structure import molecule as mol
 from ase import Atoms
-#from ase.calculators.lammps import LAMMPS
 from lammpsCalculators.reaxff import ReaxFF
+from lammpsCalculators.dynamics import LAMMPSOptimizer
 
 from energy import Fragmentation
 
@@ -15,7 +15,7 @@ import traceback
 
 ##atomization GPAW calculator
 class ReaxFFSystem():
-    def __init__(self,name, atoms = None,vacuum=6.0, h=0.2, fragment_list=None, minimize = False):
+    def __init__(self,name, atoms = None,vacuum=6.0, h=0.2, fragment_list=None, minimize = False, ff_file_path='ffield.reax'):
         self.name = name
         if atoms:
             self.system = atoms
@@ -33,43 +33,23 @@ class ReaxFFSystem():
             self.fragment_list = self.system.get_chemical_symbols()
             
         self.minimize = minimize
-
-    def setup_calculator(self):
-        """
-        parameters = dict(
-            units      = 'real',
-            atom_style = 'charge',
-            pair_style = 'reax',
-            pair_coeff = ['* * ffield.reax 1 2 3 4 5'],
-            mass       = ['1 12.0107', '2 1.00794', '3 15.9994', '4 14.0067', '5 32.065'],
-            neighbor   = '2.0 nsq'
-            )
-            
-        if self.minimize:
-            parameters['minimize'] = '1.0e-4 1.0e-6 1000 10000'
-            
-            
-        calc = LAMMPS(
-            specorder = ('C', 'H', 'O', 'N', 'S'),
-            parameters = parameters,
-            files = ['ffield.reax'],
-            keep_tmp_files = True
-            )
-            """
-            
+        self.ff_file_path = ff_file_path
+        
+    def setup_calculator(self):          
         parameters = dict(
             neighbor   = '2.0 nsq',
             )
+ 
+        calc = ReaxFF(specorder = ['C', 'H', 'O', 'N', 'S'], keep_tmp_files=True, ff_file_path=self.ff_file_path, parameters=parameters)
         
-        if self.minimize:
-            parameters['minimize'] = '1.0e-4 1.0e-6 1000 10000'
-            
-        calc = ReaxFF(specorder = ['C', 'H', 'O', 'N', 'S'], keep_tmp_files=True, parameters=parameters)
         return calc
     
     def get_potential_energy(self):
         self.system.set_calculator(self.setup_calculator())
         try:
+            if self.minimize:
+                optimizer = LAMMPSOptimizer(self.system)
+                optimizer.run()
             e = self.system.get_potential_energy()
             self.system._del_calculator()
         except:
@@ -77,15 +57,14 @@ class ReaxFFSystem():
             print "{0} molecule not converged".format(self.name)
             e = 1000 #not converged value
         return e
-    
-#    def get_chemical_symbols(self):
-#        return self.system.get_chemical_symbols()
 
 
 def test_s22():
     fragTest = Fragmentation(s22.s22)
     
-    minimize = True
+    minimize = False
+    #minimize = True
+    print 'Relaxed:', minimize
     
     fragTest.molecules = []
     fragTest.fragments = []
@@ -114,7 +93,8 @@ def testSingle(molecule):
     test_f = Fragmentation([molecule])
     
     minimize = False
-    minimize = True
+    #minimize = True
+    print 'Relaxed:', minimize
     
     sys = Atoms(s22_sim_data[molecule]['symbols'],
                 s22_sim_data[molecule]['positions'])
@@ -131,7 +111,6 @@ def testSingle(molecule):
     test_f.fill_data_reference(data_type='s22')
     test_f.run(write=True)
 
-    print 'Relaxed:', minimize
     print test_f.data
 
 if __name__ == "__main__":

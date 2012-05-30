@@ -35,13 +35,9 @@ class COMPASSSystem():
         self.minimize = minimize
 
     def setup_calculator(self):
-        
         parameters = dict(
             neighbor   = '2.0 nsq', # bin mode seems to fail with dimers
             )
-        
-        if self.minimize:
-            parameters['minimize'] = '1.0e-4 1.0e-6 1000 10000'
             
         calc = COMPASS(ff_file_path='compass.frc', parameters=parameters)
         return calc
@@ -49,6 +45,9 @@ class COMPASSSystem():
     def get_potential_energy(self):
         self.system.set_calculator(self.setup_calculator())
         try:
+            if self.minimize:
+                optimizer = LAMMPSOptimizer(self.system)
+                optimizer.run()
             e = self.system.get_potential_energy()
             self.system._del_calculator()
         except:
@@ -63,6 +62,7 @@ def test_s22():
     
     minimize = False
     minimize = True
+    print 'Relaxed:', minimize
     
     fragTest.molecules = []
     fragTest.fragments = []
@@ -117,6 +117,7 @@ def testSingle(molecule = "Methane_dimer"):
     
     minimize = False
     minimize = True
+    print 'Relaxed:', minimize
     
     sys = Atoms(s22_sim_data[molecule]['symbols'],
                 s22_sim_data[molecule]['positions'])
@@ -133,7 +134,6 @@ def testSingle(molecule = "Methane_dimer"):
     test_f.fill_data_reference(data_type='s22')
     test_f.run(write=True)
 
-    print 'Relaxed:', minimize
     print test_f.data
 
 

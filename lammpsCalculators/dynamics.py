@@ -1,5 +1,6 @@
 from ase.optimize.optimize import Dynamics
 from ase.io.trajectory import PickleTrajectory
+from ase.md.logger import MDLogger
 
 class LAMMPSOptimizer(Dynamics):
 	""" Geometry optimizer for LAMMPS. works only with LAMMPS calculators """
@@ -13,10 +14,9 @@ class LAMMPSOptimizer(Dynamics):
 class LAMMPSMolecularDynamics(Dynamics):
 	""" Base class for molecular dynamics with LAMMPS. Requires a LAMMPS calculator. """
 	def __init__(self, atoms, timestep, integrator='verlet',
-				trajectory=None, traj_interval=1000, logfile=None, restart=None, loginterval=1):
-		Dynamics.__init__(self, atoms, logfile, None)
-		
-		
+				trajectory=None, traj_interval=1000, logfile=None, restart=None, loginterval=100):
+		Dynamics.__init__(self, atoms, None, None)
+
 		self.dt = timestep
 		
 		if integrator == 'verlet':
@@ -24,11 +24,15 @@ class LAMMPSMolecularDynamics(Dynamics):
 		else:
 			raise RuntimeError('Unknown integrator: %s' % thermostat)
 		
-		if trajectory is not None:
+		if trajectory:
 			if isinstance(trajectory, str):
 				trajectory = PickleTrajectory(trajectory, 'w', atoms)
 			self.attach(trajectory, interval=traj_interval)
-			
+		
+		if logfile:
+			self.attach(MDLogger(dyn=self, atoms=atoms, logfile=logfile),
+						interval=loginterval)
+		
 		self.fix = None
 		
 	def run(self, steps=50):
@@ -52,6 +56,8 @@ class LAMMPSMolecularDynamics(Dynamics):
 		except StopIteration:
 			pass
 	
+	def get_time(self):
+		return self.nsteps * self.dt
 
 class LAMMPS_NVE(LAMMPSMolecularDynamics):
 	""" Microcanonical ensemble """

@@ -112,8 +112,9 @@ class LAMMPSBase:
                 os.mkdir(self.tmp_dir, 0755)
         
         ###
-        print self.tmp_dir        
-        self.keep_tmp_files = True
+        # For debugging
+        #print self.tmp_dir        
+        #self.keep_tmp_files = True
         ###
      
      
