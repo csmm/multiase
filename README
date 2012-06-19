@@ -6,16 +6,17 @@ CSMM ASE CALCULATORS AND SCRIPTS
 Description of directory structure
 **********************************
 
-csmmcalc/		- contains all CSMM ASE calculators
-	lammps/		- modified ASE lammps interface
-	mixer/		- mixer calculator for combining gpaw and lammps
+::
+  csmmcalc/		- contains all CSMM ASE calculators
+  	lammps/		- modified ASE lammps interface
+  	mixer/		- mixer calculator for combining gpaw and lammps
 
-tests/			- test scripts
-scripts/		- various utility scripts
-data/			- data files used by tests and scripts
-gpaw/			- gpaw scripts
-plot/			- plotting scripts
-README			- this file
+  tests/		- test scripts
+  scripts/		- various utility scripts
+  data/			- data files used by tests and scripts
+  gpaw/			- gpaw scripts
+  plot/			- plotting scripts
+  README		- this file
 
 
 Usage
@@ -26,9 +27,9 @@ their own instructions, consult your local expert if you need assistance.
 
 Add this top-level directory to your PYTHONPATH environment variable.
 Here is an example for bash assuming you have this README file in
-$HOME/scripts/README. Put following line to $HOME/.bashrc:
+$HOME/scripts/README. Put following line to $HOME/.bashrc::
 
-export PYTHONPATH=$HOME/scripts:$PYTHONPATH
+  export PYTHONPATH=$HOME/scripts:$PYTHONPATH
 
 
 Running tests
