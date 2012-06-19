@@ -2,6 +2,7 @@ import pickle
 from ase.structure import molecule as mol
 from ase import Atoms
 from lammpsCalculators.compass import COMPASS
+from lammpsCalculators.dynamics import LAMMPSOptimizer
 
 from energy import Fragmentation
 
