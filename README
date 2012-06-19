@@ -1,0 +1,19 @@
+CSMM ASE CALCULATORS AND SCRIPTS
+
+
+
+Description of directory structure:
+
+csmmcalc/		- contains all CSMM ASE calculators
+
+	lammps/		- modified ASE lammps interface
+	mixer/		- mixer calculator for combining gpaw and lammps
+
+tests/			- test scripts
+scripts/		- various utility scripts
+data/			- data files used by tests and scripts
+gpaw/			- gpaw test scripts
+plot/			- plotting scripts
+README			- this file
+
+
