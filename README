@@ -7,6 +7,7 @@ Description of directory structure
 **********************************
 
 ::
+
   csmmcalc/		- contains all CSMM ASE calculators
   	lammps/		- modified ASE lammps interface
   	mixer/		- mixer calculator for combining gpaw and lammps
