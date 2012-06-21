@@ -3,6 +3,7 @@ from ase.structure import molecule as mol
 from ase import Atoms
 from csmmcalc.lammps.reaxff import ReaxFF
 from csmmcalc.lammps.dynamics import LAMMPSOptimizer
+from csmmcalc.utils import get_datafile
 
 from energy import Fragmentation
 
@@ -16,7 +17,7 @@ import traceback
 ##atomization GPAW calculator
 class ReaxFFSystem():
     def __init__(self,name, atoms = None,vacuum=6.0, h=0.2, fragment_list=None,
-            minimize = False, ff_file_path='../data/ffield.reax'):
+            minimize = False, ff_file_path=get_datafile('ffield.reax')):
         self.name = name
         if atoms:
             self.system = atoms

@@ -3,6 +3,7 @@ from ase.structure import molecule as mol
 from ase import Atoms
 from csmmcalc.lammps.compass import COMPASS
 from csmmcalc.lammps.dynamics import LAMMPSOptimizer
+from csmmcalc.utils import get_datafile
 
 from energy import Fragmentation
 
@@ -40,7 +41,7 @@ class COMPASSSystem():
             neighbor   = '2.0 nsq', # bin mode seems to fail with dimers
             )
             
-        calc = COMPASS(ff_file_path='../data/compass.frc', parameters=parameters)
+        calc = COMPASS(ff_file_path=get_datafile('compass.frc'), parameters=parameters)
         return calc
     
     def get_potential_energy(self):
