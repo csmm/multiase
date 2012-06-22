@@ -69,7 +69,7 @@ class Mixer(Calculator):
         for i in range(len(atoms)):
             t = atoms[i].tag
             for j in range(len(self._calcs)):
-                weight = Mixer.weight(t, j)
+                weight = Mixer.weight(j, t)
                 if weight > 0.0:
                     atom_lists[j].append(atoms[i:i+1])
                     weight_lists[j].append(weight)
@@ -83,27 +83,33 @@ class Mixer(Calculator):
         
         return (my_atoms, my_weights, my_maps)
             
+
+    BITS_PER_WEIGHT = 16
+
     @staticmethod
     def tag(calc, weight):
         """
         @param calc     calculator number (index starts from 0)
-        @param weight   float in range 0.0 - 1.0, This is mapped to a 16 bit
-                        int.
+        @param weight   float in range 0.0 - 1.0, This is mapped to an
+                        int of Mixer.BITS_PER_WEIGHT bits (typically
+                        16).
 
         @return int
         """
         if calc < 0 or (weight < 0.0 or weight > 1.0):
             raise ValueError("Unable to create calculator weight")
 
-        return int(0xFFFF & int(weight * 0xFFFF)) << calc * 16
+        return int(0xFFFF & int(weight * 0xFFFF)) << calc *
+            Mixer.BITS_PER_WEIGHT
 
     @staticmethod
-    def weight(tag, calc):
+    def weight(calc, tag):
         """
-        @param tag              ASE tag encoded using tag_weight()
         @param calc             which calc weight to extract
+        @param tag              ASE tag encoded using tag_weight()
 
         @return float           returns float in range 0.0 - 1.0
         """
-        return float(float(0xFFFF & (tag >> calc * 16)) / float(0xFFFF))
+        return float(float(0xFFFF & (tag >> calc * Mixer.BITS_PER_WEIGHT)) /
+                float(0xFFFF))
 
