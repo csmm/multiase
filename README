@@ -20,17 +20,18 @@ Description of directory structure
   README		- this file
 
 
-Usage
-*****
+Installation and Usage
+**********************
 
 These scripts require ASE, GPAW and LAMMPS to be installed. Each have
 their own instructions, consult your local expert if you need assistance.
 
-Add this top-level directory to your PYTHONPATH environment variable.
-Here is an example for bash assuming you have this README file in
-$HOME/scripts/README. Put following line to $HOME/.bashrc::
+Make sure your shell environment contains correctly set CSMM_INSTALL_DIR and
+PYTHONPATH environment variables. If you're using bash, put following lines
+to $HOME/.bashrc::
 
-  export PYTHONPATH=$HOME/scripts:$PYTHONPATH
+  export CSMM_INSTALL_DIR=$HOME/scripts
+  export PYTHONPATH=$CSMM_INSTALL_DIR:$PYTHONPATH
 
 
 Running tests
