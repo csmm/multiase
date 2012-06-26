@@ -52,6 +52,7 @@ class LAMMPSParameters:
         self.angle_style    = pars.get('angle_style')        
         self.dihedral_style = pars.get('dihedral_style')
         self.improper_style = pars.get('improper_style')
+        self.special_bonds  = pars.get('special_bonds')
         
         # Pair coeffs to be specified in the input file
         self.pair_coeffs    = pars.get('pair_coeffs', [])
@@ -79,7 +80,7 @@ class LAMMPSData:
 class LAMMPSBase:
 
     def __init__(self, label='lammps', tmp_dir=None, parameters={}, 
-                 always_triclinic=False, 
+                 update_charges = False,
                  keep_alive=True, keep_tmp_files=False):
         """The LAMMPS calculators object """
   
@@ -90,6 +91,7 @@ class LAMMPSBase:
         self.forces = None
         self.atoms = None
         self.error = None
+        self.update_charges = update_charges
         self.keep_alive = keep_alive
         self.keep_tmp_files = keep_tmp_files           
         self._lmp_handle = None        # To handle the lmp process
@@ -101,6 +103,9 @@ class LAMMPSBase:
         
         # Thermo output of LAMMPS, a list of dictionaries. See read_lammps_output()
         self.thermo_content = []
+        
+        self._dump_fields = ['id', 'type', 'x', 'y', 'z', 'vx',
+                             'vy', 'vz', 'fx', 'fy', 'fz', 'q']
         
         if tmp_dir is None:
             self.tmp_dir = mkdtemp(prefix='LAMMPS-')
@@ -131,8 +136,9 @@ class LAMMPSBase:
     def clean(self, force=False):
         self._lmp_end()
         self.data.clear()
-        if not self.keep_tmp_files:
-            shutil.rmtree(self.tmp_dir)
+        # TODO: When to delete tmp dir?
+        #if not self.keep_tmp_files:
+        #    shutil.rmtree(self.tmp_dir)
 
     def get_potential_energy(self, atoms):
         self.update(atoms)
@@ -148,25 +154,28 @@ class LAMMPSBase:
         tc = self.thermo_content[-1]
         stress =  np.array([tc[i] for i in ('pxx','pyy','pzz',
                                          'pyz','pxz','pxy')])
-        return self.to_ase_units(stress, 'stress')
-
+        return self.to_ase_units(stress, 'stress')  
+    
+    def calculation_required(self, atoms, quantities=None):
+        return atoms != self.atoms
+        
     def update(self, atoms):
-        if self.atoms == atoms: return
+        if not self.calculation_required(atoms): return
         self.setup_calculation(atoms)
         self.run_single_step()
         self.read_lammps_output()
         self.read_lammps_trj()
         self.close_calculation()
     
-    def minimize(self, atoms, etol=0, ftol=0, maxeval=100000, maxiter=100000000):
+    def minimize(self, atoms, etol=0, ftol=0, maxeval=100000, maxiter=100000000, min_style=None):
         if etol == 0 and ftol == 0: 
             raise RuntimeError('Specify at least one tolerance value!')
         self.update(atoms)
         ftol = self.from_ase_units(ftol, 'force')
-        minimize_params = '%f %f %f %f' % (etol, ftol, maxeval, maxiter)
+        minimize_params = '%g %g %i %i' % (etol, ftol, maxeval, maxiter)
         self.atoms = atoms
         self.setup_calculation(atoms)
-        self.run_minimization(minimize_params)
+        self.run_minimization(minimize_params, min_style)
         self.read_lammps_output()
         self.read_lammps_trj()
         self.close_calculation()
@@ -257,8 +266,10 @@ class LAMMPSBase:
         self.lammps_input.write('print "%s"\n' % CALCULATION_END_MARK)
         self.lammps_input.write('log /dev/stdout\n') # Force LAMMPS to flush log
         
-    def run_minimization(self, param_string):
+    def run_minimization(self, param_string, min_style=None):
         self.set_dumpfreq(999999)
+        if min_style:
+            self.lammps_input.write('min_style %s\n' % min_style)
         self.lammps_input.write('minimize %s\n'  % param_string)
         self.lammps_input.write('print "%s"\n' % CALCULATION_END_MARK)
         self.lammps_input.write('log /dev/stdout\n') # Force LAMMPS to flush log
@@ -319,6 +330,8 @@ class LAMMPSBase:
         if parameters.improper_style and len(self.data.impropers) != 0:
             f.write('improper_style %s \n' % parameters.improper_style)
         
+        if parameters.special_bonds:
+            f.write('special_bonds %s \n' % parameters.special_bonds)
         
         self.write_lammps_data()
         f.write('\n### read data \n')
@@ -329,14 +342,14 @@ class LAMMPSBase:
             f.write('pair_coeff %s \n' % line)
         
         for cmd in parameters.extra_cmds:
-			f.write(cmd + '\n')
+            f.write(cmd + '\n')
         
         f.write(('thermo_style custom %s\n' +
                 'thermo_modify flush yes\n' +
                 'thermo 0\n') % (' '.join(self._custom_thermo_args)))
                 
         f.write('\ndump dump_all all custom ' +
-                '1 %s id type x y z vx vy vz fx fy fz\n' % self.lammps_trj_file.name )
+                '1 %s %s\n' % (self.lammps_trj_file.name, ' '.join(self._dump_fields)) )
 
     def set_dumpfreq(self, freq):
         self.lammps_input.write('dump_modify dump_all every %s\n' % freq)
@@ -402,7 +415,7 @@ class LAMMPSBase:
         lammps_positions = p.pos_to_lammps(self.atoms.get_positions())
         positions = self.from_ase_units(lammps_positions, 'distance')
         if self.parameters.atom_style == 'full':
-            table = [[tp, '1', a.charge, a.x, a.y, a.z]
+            table = [['1', tp, a.charge, a.x, a.y, a.z]
                 for tp, a in zip(self.data.atom_types, self.atoms)]
         elif  self.parameters.atom_style == 'charge':
             table = [[tp, a.charge, a.x, a.y, a.z]
@@ -438,9 +451,10 @@ class LAMMPSBase:
         line = f.readline()
         while line and line.strip() != CALCULATION_END_MARK:
             if 'ERROR:' in line:
-                raise RuntimeError('Error in LAMMPS execution. %s' % line)
+                raise RuntimeError('LAMMPS execution in %s failed. LAMMPS %s' 
+                        % (self.tmp_dir,line))
             if line.startswith(thermo_mark):
-				# get thermo output
+                # get thermo output
                 while True:
                     line = f.readline()
                     fields = line.split()
@@ -475,6 +489,7 @@ class LAMMPSBase:
                 positions  = np.empty((len(self.atoms), 3)) * np.nan
                 forces     = np.empty((len(self.atoms), 3)) * np.nan
                 velocities = np.empty((len(self.atoms), 3)) * np.nan
+                charges    = np.empty((len(self.atoms), )) * np.nan
 
             if 'ITEM: NUMBER OF ATOMS' in line:
                 line = f.readline()
@@ -493,29 +508,32 @@ class LAMMPSBase:
             
             if 'ITEM: ATOMS' in line:
                 # (reliably) identify values by labels behind "ITEM: ATOMS" - requires >=lammps-7Jul09
-                atom_attributes = {}
-                for (i, x) in enumerate(line.split()[2:]):
-                    atom_attributes[x] = i
+                column_names = line.split()[2:]
                 for n in range(n_atoms):
                     line = f.readline()
-                    fields = line.split()
-                    id = int(fields[atom_attributes['id']])
+                    fields = dict(zip(column_names, line.split()))
+                    id = int(fields['id'])
                     
-                    pos   = [ float(fields[atom_attributes[x]]) for x in ['x', 'y', 'z'] ]
-                    vel   = [ float(fields[atom_attributes[x]]) for x in ['vx', 'vy', 'vz'] ]
-                    force = [ float(fields[atom_attributes[x]]) for x in ['fx', 'fy', 'fz'] ]
-                    
+                    pos   = [ float(fields[col]) for col in ['x', 'y', 'z'] ]
+                    vel   = [ float(fields[col]) for col in ['vx', 'vy', 'vz'] ]
+                    force = [ float(fields[col]) for col in ['fx', 'fy', 'fz'] ]
+                    q     = float(fields['q'])
+                                        
                     rotate = self.prism.pos_to_ase
                     positions[id-1]  = rotate(self.to_ase_units(np.array(pos), 'distance'))
                     velocities[id-1] = rotate(self.to_ase_units(np.array(vel), 'velocity'))
                     forces[id-1]     = rotate(self.to_ase_units(np.array(force), 'force'))
-                    
-                    self.forces = forces
-                    if timestep > 0:
-                        self.atoms.set_positions(positions)
-                        self.atoms.set_velocities(velocities)
+                    charges[id-1]    = self.to_ase_units(np.array(q), 'charge')
+                               
+                self.forces = forces
+                if timestep > 0:
+                    self.atoms.set_positions(positions)
+                    self.atoms.set_velocities(velocities)
+                
+                if self.update_charges:
+                    self.atoms.set_charges(charges)
        
-       
+    
     def to_ase_units(self, value, quantity):
         return lammpsUnitConversion.convert(value, quantity, self.parameters.units, 'ASE')
 

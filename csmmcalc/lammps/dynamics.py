@@ -1,14 +1,15 @@
 from ase.optimize.optimize import Dynamics
 from ase.io.trajectory import PickleTrajectory
 from ase.md.logger import MDLogger
+from ase import units
 
 class LAMMPSOptimizer(Dynamics):
 	""" Geometry optimizer for LAMMPS. works only with LAMMPS calculators """
 	def __init__(self, atoms, restart=None, logfile=None, trajectory=None):
 		Dynamics.__init__(self, atoms, logfile, trajectory)
 		
-	def run(self, fmax=0.05, steps=1e8):
-		self.atoms.calc.minimize(self.atoms, ftol=fmax, maxeval=steps)
+	def run(self, fmax=0.001, steps=1e8, min_style=None):
+		self.atoms.calc.minimize(self.atoms, ftol=fmax, maxeval=steps, min_style=min_style)
 
 		
 class LAMMPSMolecularDynamics(Dynamics):
@@ -68,8 +69,8 @@ class LAMMPS_NVE(LAMMPSMolecularDynamics):
 		
 class LAMMPS_NVT(LAMMPSMolecularDynamics):
 	""" Constant temperature calculations with Nose-Hoover or Berendsen """
-	def __init__(self, atoms, timestep, temperature, t_damp=100, thermostat='Nose-Hoover',
-				**kwargs):
+	def __init__(self, atoms, timestep, temperature, t_damp=100*units.fs,
+				thermostat='Nose-Hoover', **kwargs):
 		LAMMPSMolecularDynamics.__init__(self, atoms, timestep, **kwargs)
 		
 		if thermostat == 'Nose-Hoover':
@@ -78,5 +79,7 @@ class LAMMPS_NVT(LAMMPSMolecularDynamics):
 			cmd = 'temp/berendsen'
 		else:
 			raise RuntimeError('Unknown thermostat: %s' % thermostat)
+		
+		t_damp = atoms.calc.from_ase_units(t_damp, 'time')
 		
 		self.fix = '%s %f %f %f' %(cmd, temperature, temperature, t_damp)

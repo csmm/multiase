@@ -18,6 +18,7 @@ unitSets['ASE'] = dict(
 	force = eV/angstrom,
 	pressure = 1/ase.units.Pascal,
 	stress = 1/ase.units.Pascal,
+	charge = elementary_charge
 	)
 
 unitSets['metal'] = dict(
