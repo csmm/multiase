@@ -1,5 +1,5 @@
 import pickle
-import g2_1 as g22_exp_data
+import ase.data.g2_1 as g22_exp_data
 from ase.data.s22 import data as s22_sim_data
 from ase.data.s22 import get_interaction_energy_s22
 

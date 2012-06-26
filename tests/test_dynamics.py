@@ -2,42 +2,27 @@ from ase.atoms import Atoms
 from csmmcalc.lammps.reaxff import ReaxFF
 from csmmcalc.lammps.compass import COMPASS
 from csmmcalc.lammps.dynamics import LAMMPSOptimizer, LAMMPS_NVT
+from csmmcalc.utils import get_datafile
 from ase.data import s22
 from ase import units
 import numpy as np
 import ase.io
 from ase.io.trajectory import PickleTrajectory
 
-def get_s22_system(name):
-	moldata = s22.data[name]
-	atoms = Atoms(moldata['symbols'], moldata['positions'])
-	
-	xmin = min(atoms.positions[:, 0])
-	ymin = min(atoms.positions[:, 1])
-	zmin = min(atoms.positions[:, 2])
-	
-	xmax = max(atoms.positions[:, 0])
-	ymax = max(atoms.positions[:, 1])
-	zmax = max(atoms.positions[:, 2])
-	
-	atoms.translate(np.array((-xmin, -ymin, -zmin))*2)
-	atoms.set_cell(np.array([(xmax-xmin, 0, 0), (0, ymax-ymin, 0), (0, 0, zmax-zmin)])*4)
-	return atoms
-
-
-atoms = get_s22_system('Methane_dimer')
+atoms = s22.create_s22_system('Methane_dimer')
+atoms.center(vacuum=10.0)
 print atoms.positions
 
-atoms.calc = COMPASS()
+atoms.calc = COMPASS(ff_file_path=get_datafile('compass.frc'))
 optimizer = LAMMPSOptimizer(atoms)
 optimizer.run()
 print atoms.positions
 
-atoms.calc = ReaxFF(specorder = ('C', 'H', 'O', 'N', 'S'))
+atoms.calc = ReaxFF(ff_file_path=get_datafile('ffield.reax'))
 dyn = LAMMPS_NVT(atoms, 1*units.fs, 100, trajectory='test.traj', traj_interval = 2)
 dyn.run(5)
 
-atoms.calc = COMPASS()
+atoms.calc = COMPASS(ff_file_path=get_datafile('compass.frc'))
 dyn.run(10)
 
 trj = PickleTrajectory('test.traj', 'r')

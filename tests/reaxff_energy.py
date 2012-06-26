@@ -16,18 +16,14 @@ import traceback
 
 ##atomization GPAW calculator
 class ReaxFFSystem():
-    def __init__(self,name, atoms = None,vacuum=6.0, h=0.2, fragment_list=None,
+    def __init__(self,name, atoms = None, fragment_list=None,
             minimize = False, ff_file_path=get_datafile('ffield.reax')):
         self.name = name
         if atoms:
             self.system = atoms
         else:
             self.system = mol(name) #use the default g22
-        self.system.center(vacuum=vacuum)
-        self.h = h
-        cell = self.system.get_cell()
-        self.system.set_cell((cell / (4 * h)).round() * 4 * h)
-        self.system.center()
+        self.system.center(vacuum=10.0)
         self.calc = None
         if fragment_list:
             self.fragment_list = fragment_list
@@ -42,7 +38,7 @@ class ReaxFFSystem():
             neighbor   = '2.0 nsq',
             )
  
-        calc = ReaxFF(specorder = ['C', 'H', 'O', 'N', 'S'], keep_tmp_files=True, ff_file_path=self.ff_file_path, parameters=parameters)
+        calc = ReaxFF(ff_file_path=self.ff_file_path, parameters=parameters)
         
         return calc
     
