@@ -25,9 +25,6 @@ class CHARMM(LAMMPSBase):
 		self.use_ff_file(ff_file_path)
 		self.ff_parameters = read_charmm_params.read(open(ff_file_path))
 	
-	def set_bonds(self, bonds):
-		self.raw_bonds = [(bond[0].index, bond[1].index) for bond in bonds]
-	
 	def prepare_calculation(self):
 		""" Fill self.data """
 		
@@ -35,11 +32,12 @@ class CHARMM(LAMMPSBase):
 		
 		atoms = self.atoms
 		
-		if hasattr(self, 'raw_bonds'):
-			self.bonds = [Bond((self.atoms[b[0]], self.atoms[b[1]])) for b in self.raw_bonds]
-		else:
-			self.bonds = self.detectBonds()
-		bonds = self.bonds
+		if not atoms.has('bonds'):
+			atoms.set_array('bonds', self.detectBonds())
+			
+		bondarr = atoms.get_array('bonds')
+		bonds = [Bond((a, b)) for a,b in combinations(atoms, 2) if b.index in bondarr[a.index]]
+		self.bonds = bonds
 		angles    = self.findAngles()
 		dihedrals = self.findDihedrals()
 		impropers = self.findImpropers()
@@ -49,8 +47,6 @@ class CHARMM(LAMMPSBase):
 		# Add a charmm type property to ASE atoms
 		charmm_atom_types = np.array(charmm_types.get_types(atoms, bonds))
 		if not atoms.has('charmm_types'):
-			atoms.new_array('charmm_types', charmm_atom_types)
-		else:
 			atoms.set_array('charmm_types', charmm_atom_types)
 		
 		ase.atom.names['charmm_type'] = ('charmm_types', '')
@@ -150,12 +146,17 @@ class CHARMM(LAMMPSBase):
 		del ase.atom.names['charmm_type']
 	
 	def detectBonds(self):
-		bonds = []
+		from ase.data import covalent_radii
+		atoms = self.atoms
 		tolerance = 1.15
-		for a1, a2 in combinations(self.atoms, 2):
-			bondLength = covalent_radii[a1.number] + covalent_radii[a2.number]
-			if self.atoms.get_distance(a1.index, a2.index, mic=True) < bondLength*tolerance:
-				bonds.append(Bond((a1, a2)))
+		def bonded(i, j):
+			bondLength = covalent_radii[atoms[i].number] + covalent_radii[atoms[j].number]
+			return atoms.get_distance(i, j, mic=True) < bondLength*tolerance
+				
+		N = len(atoms)
+		bonds = np.empty((N), dtype=object)
+		for i in range(N):
+			bonds[i] = [j for j in range(N) if bonded(i, j)]
 		return bonds
 		
 	

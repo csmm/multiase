@@ -37,11 +37,12 @@ class COMPASS(LAMMPSBase):
 		
 		atoms = self.atoms
 		
-		if hasattr(self, 'raw_bonds'):
-			self.bonds = [Bond((self.atoms[b[0]], self.atoms[b[1]])) for b in self.raw_bonds]
-		else:
-			self.bonds = self.detectBonds()
-		bonds = self.bonds
+		if not atoms.has('bonds'):
+			atoms.set_array('bonds', self.detectBonds())
+		
+		bondarr = atoms.get_array('bonds')
+		bonds = [Bond((a, b)) for a,b in combinations(atoms, 2) if b.index in bondarr[a.index]]
+		self.bonds = bonds
 		angles    = self.findAngles()
 		dihedrals = self.findDihedrals()
 		impropers = self.findImpropers()
@@ -174,8 +175,20 @@ class COMPASS(LAMMPSBase):
 		del Atom.compass_type
 		del ase.atom.names['compass_type']
 		
-	
-	
+	def detectBonds(self):
+		from ase.data import covalent_radii
+		atoms = self.atoms
+		tolerance = 1.15
+		def bonded(i, j):
+			bondLength = covalent_radii[atoms[i].number] + covalent_radii[atoms[j].number]
+			return atoms.get_distance(i, j, mic=True) < bondLength*tolerance
+				
+		N = len(atoms)
+		bonds = np.empty((N), dtype=object)
+		for i in range(N):
+			bonds[i] = [j for j in range(N) if bonded(i, j)]
+		return bonds
+	"""
 	def detectBonds(self):
 		bonds = []
 		tolerance = 1.2
@@ -184,7 +197,7 @@ class COMPASS(LAMMPSBase):
 			if self.atoms.get_distance(a1.index, a2.index, mic=True) < bondLength*tolerance:
 				bonds.append(Bond((a1, a2)))
 		return bonds
-		
+	"""
 	
 	def atomNeighbors(self, atom):
 		return [b.otherAtom(atom) for b in self.bonds if atom in b]

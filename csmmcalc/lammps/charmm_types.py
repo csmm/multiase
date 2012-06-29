@@ -52,7 +52,7 @@ def get_types(atoms, bonds):
 	for atom in lst:
 		type = eval(atom.symbol).__call__(atom)
 		if type == None:
-			print 'no type for', atom.symbol, atom.environment
+			raise Exception('No CHARMM type for %s, %s' % (atom.symbol, atom.environment))
 		else: 
 			#print type[0], ':', type[1]
 			result.append(type[0])
@@ -88,6 +88,8 @@ def C(atom):
 			return 'CG331', 'aliphatic C for methyl group (-CH3)'
 		elif neighs.count('H') == 2:
 			return 'CG321', 'aliphatic C for CH2'
+		elif neighs.count('H') == 1:
+			return 'CG311', 'aliphatic C with 1 H, CH'
 
 	elif len(neighs) == 3:
 		if atom.in_6_mem_ring():

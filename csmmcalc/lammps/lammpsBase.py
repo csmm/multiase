@@ -81,7 +81,7 @@ class LAMMPSBase:
 
     def __init__(self, label='lammps', tmp_dir=None, parameters={}, 
                  update_charges = False,
-                 keep_alive=True, keep_tmp_files=False):
+                 keep_alive=True, debug=False):
         """The LAMMPS calculators object """
   
         self.label = label
@@ -93,7 +93,7 @@ class LAMMPSBase:
         self.error = None
         self.update_charges = update_charges
         self.keep_alive = keep_alive
-        self.keep_tmp_files = keep_tmp_files           
+        self.keep_tmp_files = debug           
         self._lmp_handle = None        # To handle the lmp process
 
         self._custom_thermo_args = ['step', 'temp', 'press', 'cpu', 
@@ -116,12 +116,8 @@ class LAMMPSBase:
             if not os.path.isdir(self.tmp_dir):
                 os.mkdir(self.tmp_dir, 0755)
         
-        ###
-        # For debugging
-        #print self.tmp_dir        
-        #self.keep_tmp_files = True
-        ###
-     
+        if debug:
+           print 'LAMMPS (label: %s) running at %s' % (self.label, self.tmp_dir)
      
     def prepare_calculation(self):
         """ Implement this method in subclasses """
