@@ -15,7 +15,8 @@ Cf = (3.*((3.*(pi**2.))**(2./3.))/10.)
 
 #Introduce the element of the molecule:
 #biX = ['O2','HF','H2O','CH4','NH3','CN','CO','F2','HCN','N2']
-biX = ['CO']
+#biX = ['CO']
+biX = ['C']
 #Introduce the name of the file for the molecule:
 #fileX = 'data_%s_TF.pkl'
 
@@ -48,10 +49,11 @@ def run_per_element(element,read_gpw=False):
 
 #    calc = GPAW(h=0.18, nbands=-4, xc='PBE', occupations=FermiDirac(0.0),fixmom=True)
 
-          calc = GPAW(h=0.18, nbands=-4, xc='PBE',
-                      occupations=FermiDirac(0.0,fixmagmom=True))
+          calc = GPAW(h=0.18, nbands=-4, xc='PBE')
+          if len(molecule)==1: #atom case
+               calc.set(hund=True)
 
-
+          calc.set(occupations=FermiDirac(0.0,fixmagmom=True))
           calc.set(txt='{0}.out'.format(element))
           molecule.set_calculator(calc)
      
@@ -63,8 +65,11 @@ def run_per_element(element,read_gpw=False):
 
      nmolecule_s0 = 2.*calc.get_all_electron_density(gridrefinement=gridrefinement,pad=False, spin=0)
      nmolecule_s1 = 2.*calc.get_all_electron_density(gridrefinement=gridrefinement,pad=False, spin=1)
+     nmolecule_s0 = maximum(nmolecule_s0, 1e-40)  # cuts to avoid numerical errors
+     nmolecule_s1 = maximum(nmolecule_s1, 1e-40)  # cuts to avoid numerical errors      
      nmoleculepower_s0 = nmolecule_s0**(5./3.)
      nmoleculepower_s1 = nmolecule_s1**(5./3.)
+
 
 #_______________________________ MOLECULE INTEGRAL _____________________
 
@@ -89,4 +94,4 @@ def run_per_element(element,read_gpw=False):
      output.close()
      
 for e in biX:
-     run_per_element(e,read_gpw=True)
+     run_per_element(e,read_gpw=False)

@@ -12,9 +12,6 @@ from ase.structure import molecule as read_molecule
 from gpaw.utilities.blas import axpy
 from gpaw.fd_operators import Gradient
 
-#biX = ['CH4','NH3','H2O','HF','CN','HCN','CO','N2','O2','F2']
-biX = ['CO']
-
 def calculate_sigma2(calc,n_sg,gd):
     grad_v = [Gradient(gd, v, n=3).apply for v in range(3)]
     gradn_g = gd.empty()
@@ -43,8 +40,8 @@ gridrefinement = 2
 
 #Introduce the element of the molecule:
 #biX = ['O2','HF','H2O','CH4','NH3','CN','CO','F2','HCN','NO']
-
-biX = ['CO']
+#biX = ['CO']
+biX = ['H']
 
 #Introduce the name of the file for the molecule:
 #fileX_w = 'data_%s_W.pkl'
@@ -80,11 +77,11 @@ def run_per_element(element,read_gpw=False):
             molecule = read('%s.xyz' % element)
         set_work_cell(molecule,h,vacuum)
 
+        calc = GPAW(h=0.18, nbands=-8, xc='PBE')
+        if len(molecule)==1: #atom case
+            calc.set(hund=True)
 
-        calc = GPAW(h=0.18, nbands=-8, xc='PBE',
-                    occupations=FermiDirac(0.0,fixmagmom=True))
-
-        
+        calc.set(occupations=FermiDirac(0.0,fixmagmom=True))
         calc.set(txt='{0}.out'.format(element))
         molecule.set_calculator(calc)
 
