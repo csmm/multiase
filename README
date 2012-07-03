@@ -17,8 +17,9 @@ Description of directory structure
   data/			- data files used by tests and scripts
   gpaw/			- gpaw scripts
   plot/			- plotting scripts
+  kinetic/		- kinetic energy functionals scripts
   README		- this file
-
+  
 
 Installation and Usage
 **********************
