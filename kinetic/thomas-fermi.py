@@ -1,4 +1,5 @@
-#THIS SCRIPT INTEGRATES THE DENSITY TO THE POWER SO THAT THE SCRIPT energy_TF_molecules.py CAN GIVE THE VALUE OF THE KINETIC ENERGY IN THE DIFFERENT APPROXIMATIONS: THOAS-FERMI, GAUSS, BESSEL.
+#THIS SCRIPT INTEGRATES THE DENSITY TO THE POWER SO THAT THE SCRIPT energy_TF_molecules.py CAN GIVE THE VALUE OF 
+#THE KINETIC ENERGY IN THE DIFFERENT APPROXIMATIONS: THOAS-FERMI, GAUSS, BESSEL.
 
 from gpaw import *
 from ase import *
@@ -9,11 +10,12 @@ from ase.io import read
 import pickle
 from ase.structure import molecule as read_molecule
 
-gridrefinement = 1
+gridrefinement = 2
+Cf = (3.*((3.*(pi**2.))**(2./3.))/10.)
 
 #Introduce the element of the molecule:
-biX = ['O2','HF','H2O','CH4','NH3','CN','CO','F2','HCN','N2']
-
+#biX = ['O2','HF','H2O','CH4','NH3','CN','CO','F2','HCN','N2']
+biX = ['CO']
 #Introduce the name of the file for the molecule:
 #fileX = 'data_%s_TF.pkl'
 
@@ -25,17 +27,20 @@ def set_work_cell(molecule,h,vacuum):
      molecule.center(vacuum=vacuum)
      cell = molecule.get_cell()
      for i in [0,1,2]:
-        cell[i,i] = int(cell[i,i]/4./h)*4.*h
+          cell[i,i] = int(cell[i,i]/4./h)*4.*h
      molecule.set_cell(cell)
-return
+     return
 
-def run_per_element(element):
-    print 'Processing element %s' % element
+def run_per_element(element,read_gpw=False):
+     print 'Processing element %s' % element
+     fileX = 'data_%s_TF.pkl' % element
+
 #    molecule = read('%s.xyz' % element)
-    molecule = read_molecule('%s' % element)
-    set_work_cell(molecule,h,vacuum)
-
-    fileX = 'data_%s_TF.pkl' % element
+     if read_gpw:
+          molecule, calc = restart('%s.gpw' %element)
+     else:
+          molecule = read_molecule('%s' % element)
+          set_work_cell(molecule,h,vacuum)
 
 
 
@@ -43,37 +48,45 @@ def run_per_element(element):
 
 #    calc = GPAW(h=0.18, nbands=-4, xc='PBE', occupations=FermiDirac(0.0),fixmom=True)
 
-    calc = GPAW(h=0.18, nbands=-4, xc='PBE',
-            occupations=FermiDirac(0.0,fixmagmom=True))
+          calc = GPAW(h=0.18, nbands=-4, xc='PBE',
+                      occupations=FermiDirac(0.0,fixmagmom=True))
 
 
-    calc.set(txt='{0}.out'.format(element))
-    molecule.set_calculator(calc)
-
-    biX_pot = molecule.get_potential_energy()
-    calc.write('{0}.gpw'.format(element))
+          calc.set(txt='{0}.out'.format(element))
+          molecule.set_calculator(calc)
+     
+          biX_pot = molecule.get_potential_energy()
+          calc.write('{0}.gpw'.format(element))
 
 #_______________________________ MOLECULE DENSITY ______________________
+#calculate using spin keyword, works for both spin pol and spin unpol
 
-    nmolecule = calc.get_all_electron_density(gridrefinement=gridrefinement)
-
-    nmoleculepower = nmolecule**(5./3.)
+     nmolecule_s0 = 2.*calc.get_all_electron_density(gridrefinement=gridrefinement,pad=False, spin=0)
+     nmolecule_s1 = 2.*calc.get_all_electron_density(gridrefinement=gridrefinement,pad=False, spin=1)
+     nmoleculepower_s0 = nmolecule_s0**(5./3.)
+     nmoleculepower_s1 = nmolecule_s1**(5./3.)
 
 #_______________________________ MOLECULE INTEGRAL _____________________
 
-    nmoleculebohr = nmolecule*(Bohr**3)
+     nmoleculebohr_s0 = nmolecule_s0*(Bohr**3)
+     nmoleculebohr_s1 = nmolecule_s1*(Bohr**3)
 
-    nmoleculebohrpower = nmoleculebohr**(5./3.)
+     nmoleculebohrpower_s0 = nmoleculebohr_s0**(5./3.)
+     nmoleculebohrpower_s1 = nmoleculebohr_s1**(5./3.)
 
-    Imolecule = calc.density.gd.integrate(nmoleculebohrpower)
+     
+     Imolecule = calc.density.finegd.integrate(nmoleculebohrpower_s0)/2.
+     Imolecule += calc.density.finegd.integrate(nmoleculebohrpower_s1)/2.
+     KIN_TF = Imolecule*Cf*27.211
 
+     print 'Kinetic energy, TF approx.', KIN_TF
 #_______________________________ RESULTS _______________________________
 
-    data1 = {'Molecule density':(nmolecule),'Molecule density power integral':(Imolecule)}
+     data1 = {'Molecule density':((nmolecule_s0+nmolecule_s1)/2.),'Molecule density power integral':(Imolecule)}
 
-    output = open(fileX, 'wb')
-    pickle.dump(data1, output)
-    output.close()
-
+     output = open(fileX, 'wb')
+     pickle.dump(data1, output)
+     output.close()
+     
 for e in biX:
-    run_per_element(e)
+     run_per_element(e,read_gpw=True)

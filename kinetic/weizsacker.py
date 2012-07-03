@@ -8,37 +8,20 @@ import pickle
 from ase.structure import molecule as read_molecule
 
 
-from gpaw.xc.lda import LDA
+
 from gpaw.utilities.blas import axpy
 from gpaw.fd_operators import Gradient
-#from gpaw.sphere.lebedev import Y_nL, weight_n
-#from gpaw.xc.pawcorrection import rnablaY_nLv
 
-biX = ['CH4','NH3','H2O','HF','CN','HCN','CO','N2','O2','F2']
-
-
-
-#def set_grid_descriptor(self, gd):
-    #LDA.set_grid_descriptor(self, gd)
+#biX = ['CH4','NH3','H2O','HF','CN','HCN','CO','N2','O2','F2']
+biX = ['CO']
 
 def calculate_sigma2(calc,n_sg,gd):
     grad_v = [Gradient(gd, v, n=3).apply for v in range(3)]
-    #nspins = calc.wfs.nspins
-    nspins = 1
-    #taut_sG = calc.wfs.gd.empty((nspins))
     gradn_g = gd.empty()
-    print 'gradn_g', shape(gradn_g)
-    print 'n_sg', shape(n_sg)
-    #for s in range(nspins):
     taut_g = gd.zeros()
     for v in range(3):
         grad_v[v](n_sg, gradn_g)
         axpy(1.0, gradn_g**2, taut_g)
-      #  ntinv_g = 0. * taut_g
-      #  nt_ok = np.where(n_sg[s] > 1e-7)
-      #  ntinv_g[nt_ok] = 1.0 / nt_sg[s][nt_ok]
-      #  taut_g *= ntinv_g
-      #  self.restrict(taut_g, taut_sG[s])
     return taut_g, 1.0
 
 def calculate_sigma(calc,n_sg,gd):
@@ -56,12 +39,12 @@ def calculate_sigma(calc,n_sg,gd):
     return sigma_xg, gradn_svg
 
 
-gridrefinement = 1
+gridrefinement = 2
 
 #Introduce the element of the molecule:
 #biX = ['O2','HF','H2O','CH4','NH3','CN','CO','F2','HCN','NO']
 
-#biX = ['O']
+biX = ['CO']
 
 #Introduce the name of the file for the molecule:
 #fileX_w = 'data_%s_W.pkl'
@@ -79,43 +62,54 @@ def get_alpha(n, sigma):
     return tau_w
 
 def set_work_cell(molecule,h,vacuum):
-         molecule.center(vacuum=vacuum)
-         cell = molecule.get_cell()
-         for i in [0,1,2]:
-            cell[i,i] = int(cell[i,i]/4./h)*4.*h
-         molecule.set_cell(cell)def run_per_element(element):
+    molecule.center(vacuum=vacuum)
+    cell = molecule.get_cell()
+    for i in [0,1,2]:
+        cell[i,i] = int(cell[i,i]/4./h)*4.*h
+    molecule.set_cell(cell)
+    return
+def run_per_element(element,read_gpw=False):
     print 'Processing element %s' % element
-
     fileX_w = 'data_%s_W.pkl' % element
-
-    try:
-        molecule = read_molecule('%s' % element)
-    except:
-        molecule = read('%s.xyz' % element)
-    set_work_cell(molecule,h,vacuum)
-
-
-    calc = GPAW(h=0.18, nbands=-8, xc='PBE',
-            occupations=FermiDirac(0.0,fixmagmom=True))
+    if read_gpw:
+        molecule,calc = restart('%s.gpw' %element)
+    else:
+        try:
+            molecule = read_molecule('%s' % element)
+        except:
+            molecule = read('%s.xyz' % element)
+        set_work_cell(molecule,h,vacuum)
 
 
-    calc.set(txt='{0}.out'.format(element))
-    molecule.set_calculator(calc)
+        calc = GPAW(h=0.18, nbands=-8, xc='PBE',
+                    occupations=FermiDirac(0.0,fixmagmom=True))
 
-    biX_pot = molecule.get_potential_energy()
-    calc.write('{0}.gpw'.format(element))
+        
+        calc.set(txt='{0}.out'.format(element))
+        molecule.set_calculator(calc)
 
-
-    nmolecule = calc.get_all_electron_density(gridrefinement=gridrefinement,
-            pad=False)
-    nmoleculebohr = nmolecule*(Bohr**3)
-
-    sigma_xg, gradn_svg = calculate_sigma2(calc,nmoleculebohr,calc.density.gd)
+        biX_pot = molecule.get_potential_energy()
+        calc.write('{0}.gpw'.format(element))
 
 
-    tau_w = get_alpha(nmoleculebohr,sigma_xg)
+    nmolecule_s0 = calc.get_all_electron_density(gridrefinement=gridrefinement,
+            pad=False, spin=0)
+    nmolecule_s1 = calc.get_all_electron_density(gridrefinement=gridrefinement,
+            pad=False, spin=1)
 
-    Itau_w = calc.density.gd.integrate(tau_w)
+    nmoleculebohr_s0 = 2.*nmolecule_s0*(Bohr**3)
+    nmoleculebohr_s1 = 2.*nmolecule_s1*(Bohr**3)
+
+    sigma_s0g, gradn_s0vg = calculate_sigma2(calc,nmoleculebohr_s0,calc.density.finegd)
+    sigma_s1g, gradn_s1vg = calculate_sigma2(calc,nmoleculebohr_s1,calc.density.finegd)
+
+
+    tau_ws0 = get_alpha(nmoleculebohr_s0,sigma_s0g)
+    tau_ws1 = get_alpha(nmoleculebohr_s1,sigma_s1g)
+
+    Itau_w = calc.density.finegd.integrate(tau_ws0)/2.
+    Itau_w += calc.density.finegd.integrate(tau_ws1)/2.
+
 
     print '%%%%%%%%%%%%%%%%%%%% %s %%%%%%%%%%%%%%%%%%' % element
     print 'WEIZSACKER (Ha)', Itau_w
@@ -129,8 +123,8 @@ def set_work_cell(molecule,h,vacuum):
     output.close
 
 for e in biX:
-    run_per_element(e)
+    run_per_element(e, read_gpw=True)
 
-         return
+    
 
 
