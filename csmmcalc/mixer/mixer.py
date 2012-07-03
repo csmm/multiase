@@ -11,122 +11,117 @@ from gpaw import GPAW
 
 from csmmcalc.lammps.reaxff import ReaxFF
 
-class Mixer(Calculator):
-    def __init__(self, calcs, cells=None):
-        """
-        @param calcs        list of initialized ASE calculator objects
-        @param cells        list of unit cell matrices to use, one per
-                            calculator
-        """
-        self._atoms = [0] * len(calcs)
-        self._calcs = calcs
-        self._cells = cells
 
+class Calculation(object):
+    calculator = None
+    cell = None
+    atom_tags = ()
 
     def calculation_required(self, atoms, quantities):
-        a,w,m = self._get_atoms(atoms)
-        for i in range(len(self._calcs)):
-            if self._calcs[i].calculation_required(a[i], quantities):
+        subset, subset_map = self.get_subset(atoms)
+        return self.calculator.calculation_required(subset, quantities)
+
+    def get_subset(self, atoms):
+        subset, subset_map = self.filter_atoms(atoms, self.atom_tags)
+        subset.set_cell(self.cell)
+        subset.center()
+        subset.set_calculator(self.calculator)
+        return subset, subset_map
+
+    def filter_atoms(self, atoms, tags):
+        """
+        @param atoms    the normal ASE Atoms object
+        @param tags     list of tags to match
+
+        @return Atoms, map
+                        map[i] gives the original index
+                        of Atoms[i]
+        """
+        subset = None
+        subset_map = {}
+        k = 0
+        for i in range(len(atoms)):
+            if atoms[i].tag not in tags:
+                continue
+
+            if not subset:
+                subset = Atoms(atoms[i:i+1])
+            else:
+                subset.extend(atoms[i:i+1])
+
+            subset_map[k] = i
+            k += 1
+
+        return subset, subset_map
+
+
+class ForceCalculation(Calculation):
+    weights = ()
+    
+    def get_forces(self, atoms):
+        subset, subset_map = self.get_subset(atoms)
+        
+        forces = self.calculator.get_forces(subset)
+
+        weight_array = np.ones_like(forces)
+        for i in range(len(subset)):
+            weight_array[i] = weight_array[i] * self.weights[self.atom_tags[i]]
+        
+        forces *= weight_array
+        
+        # now map them to the original atom sequence
+        res = np.zeros((len(atoms), 3))
+        for i in range(len(subset)):
+            res[subset_map[i]] = forces[i]
+        
+        return res
+
+
+class EnergyCalculation(Calculation):
+    coeff = 1
+
+    def get_energy(self, atoms, force_consistent=False):
+        subset, subset_map = self.get_subset(atoms)
+        energy = self.calculator.get_potential_energy(subset)
+        return self.coeff * energy
+
+
+class Mixer(Calculator):
+    def __init__(self, forces=None, energies=None):
+        """
+        @param forces           list of Mixer.ForceCalculation to drive force
+                                calculations
+        @param energies         list of Mixer.EnergyCalculation to drive desired
+                                number of energy region calculations
+        """
+        self._forces = forces
+        self._energies = energies
+
+    def calculation_required(self, atoms, quantities):
+        for c in self._forces + self._energies:
+            if c.calculation_required(atoms, quantities):
                 return True
         return False
         
 
     def get_forces(self, atoms):
         """
-        @param atoms    - the normal ASE Atoms object
-        @return array() - the expected np.array() containing
-                          the forces
+        @param atoms        the normal ASE Atoms object
+        @return np.array()  the expected np.array() containing
+                            the forces
         """
         forces = np.zeros((len(atoms), 3))
-        a_list, w_list, a_maps = self._get_atoms(atoms)
-        for i in range(len(self._calcs)):
-            f = self._calcs[i].get_forces(a_list[i])
-            wa = np.ones_like(f)
-            for j in range(len(w_list[i])):
-                wa[j] = wa[j] * w_list[i][j]
-            f = f * wa
-            for k in range(len(a_list[i])):
-                forces[a_maps[i][k]] += f[k]
-
+        for fc in self._forces:
+            forces += fc.get_forces(atoms)
         return forces
 
     def get_potential_energy(self, atoms=None, force_consistent=False):
         """
-        TODO: What should be done here? The mixed hamiltonian model
-              doesn't really work for potential energy calculations
-              if we don't get contributions of each atom separately.
-
-              We *could* ask the sub-calcs to calculate energy for
-              configuration where each atom with 0<w<1.0 is left out
-              one by one and thus get their individual contribution
-              and mix using the same weights as with forces?
+        @param atoms        the normal ASE Atoms object
+        @return float       the energy of the system
         """
-        return 0.0
-
-    def _get_atoms(self, atoms):
-        """
-        @param atoms    - the normal ASE Atoms object
-
-        @return (atoms[], weights[], maps[])
-            - returns a tuple that contains three lists that
-              have the atoms, mixing weights and atom mappings
-              for each calculator
-        """
-        # create per calc atoms, weight, map lists
-        
-        wrk_atoms = [0] * len(self._calcs)
-        wrk_weights = [[] for x in range(len(self._calcs))]
-        wrk_maps = [[] for x in range(len(self._calcs))]
-        
-        for i in range(len(atoms)):
-            t = atoms[i].tag
-            for j in range(len(self._calcs)):
-                weight = Mixer.weight(j, t)
-                if weight > 0.0:
-                    if wrk_atoms[j] == 0:
-                        wrk_atoms[j] = Atoms(atoms[i:i+1])
-                    else:
-                        wrk_atoms[j].extend(atoms[i:i+1])
-                    wrk_weights[j].append(weight)
-                    wrk_maps[j].append(i)
-
-        # Atoms object of each calculator now contain the right atoms.
-        # All that's left is to switch to right unit cell and center
-        # the atoms so that they hopefully fit within it.
-
-        for i in range(len(self._calcs)):
-            wrk_atoms[i].set_cell(self._cells[i])
-            wrk_atoms[i].center()
-
-        return (wrk_atoms, wrk_weights, wrk_maps)
-            
-
-    BITS_PER_WEIGHT = 16
-
-    @staticmethod
-    def tag(calc, weight):
-        """
-        @param calc     calculator number (index starts from 0)
-        @param weight   float in range 0.0 - 1.0, This is mapped to an
-                        int of Mixer.BITS_PER_WEIGHT bits (typically
-                        32).
-
-        @return int
-        """
-        if calc < 0 or (weight < 0.0 or weight > 1.0):
-            raise ValueError("Unable to create calculator weight")
-
-        return int(0xFFFF & int(weight * 0xFFFF)) << (calc *
-            Mixer.BITS_PER_WEIGHT)
-
-    @staticmethod
-    def weight(calc, tag):
-        """
-        @param calc             which calc weight to extract
-        @param tag              ASE tag encoded using Mixer.tag()
-
-        @return float           returns float in range 0.0 - 1.0
-        """
-        return float(float(0xFFFF & (tag >> calc *
-            Mixer.BITS_PER_WEIGHT)) / float(0xFFFF))
+        energy = 0.0
+        for ec in self._energies:
+            energy += ec.get_energy(atoms, force_consistent)
+        return energy
 
