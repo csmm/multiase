@@ -9,39 +9,19 @@ import pickle
 #Thomas-Fermi constant.
 Cf = (3.*((3.*(pi**2.))**(2./3.))/10.)
 
-#Introduce the molecules to be studiedbiX = ['CH4']
-biX = ['F2']
+#Introduce the molecules to be studied:
+biX = ['H','B','C','N','O','F','CH4','NH3','H2O','HF','CN','HCN','CO','N2','O2','F2']
 
-#N_H = 1.
-#N_B = 5.
-#N_C = 6.
-#N_N = 7.
-#N_O = 8.
-#N_F = 9.
+#Introduce the number of electrons in the atom or molecule:
+N = [1.,5.,6.,7.,8.,9.,10.,10.,10.,10.,13.,14.,14.,14.,16.,18.]
 
-#Introduce the name of the file of the molecule in TF:
-#fileX = 'data_%s_TF.pkl' 
-
-#Introduce the name of the file of the molecule in W:
-#fileX_w = 'data_%s_W.pkl' 
-
-
-
-def run_per_element(element):
+def run_per_element(element, N):
     print ' '
     print 'processing element %s' % element
 
     fileX = 'data_%s_TF.pkl' % element
     fileX_w = 'data_%s_W.pkl' % element
-
-    #Getting Thomas-Fermi kinetic energy.
-    #pkl_file = open(fileX,'rb')
-    #data1 = pickle.load(pkl_file)
-    #pkl_file.close()
-
-    #Iatom = data1['Atom density power integral']
-    #TFkin = Iatom*Cf
-
+    
     #Getting Weizsacker kinetic energy.
     pkl_file = open(fileX_w, 'rb')
     data_w = pickle.load(pkl_file)
@@ -61,7 +41,6 @@ def run_per_element(element):
 
     #Getting the factor that depends on N.
     #N = read('%s' % element)
-    N = 18.
 
     gamma = 1.0 - (1.412/(N**(1./3.))) 
     
@@ -74,6 +53,6 @@ def run_per_element(element):
     print ' '
 
 
-for e in biX:
-    run_per_element(e)
+for e,n in zip(biX,N):
+    run_per_element(e,n)
 
