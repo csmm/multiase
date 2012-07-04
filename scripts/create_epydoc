@@ -1,0 +1,3 @@
+#!/bin/sh
+
+epydoc -o $CSMM_INSTALL_DIR/epydocs ./csmmcalc

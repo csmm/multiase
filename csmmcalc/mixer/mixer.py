@@ -28,13 +28,18 @@ class Calculation(object):
 
     def get_subset(self, atoms):
         """
-        @param atoms            the normal ASE Atoms object
+        Return the subset of atoms that match the atom_ids of this
+        Calculation object.
 
-        @return (Atoms, map)    returns a subset of atoms
-                                created with filter_atoms()
-                                using self.atom_ids.
-                                map[i] gives the original index
-                                of Atoms[i] in the atoms list.
+        @type atoms:           Atoms
+        @param atoms:          the normal ASE Atoms object
+
+        @rtype:                (Atoms, dict)
+        @return:               returns a subset of atoms
+                               created with filter_atoms()
+                               using self.atom_ids.
+                               map[i] gives the original index
+                               of Atoms[i] in the atoms list.
         """
         subset, subset_map = self.filter_atoms(atoms, self.atom_ids)
         subset.set_cell(self.cell)
@@ -44,11 +49,14 @@ class Calculation(object):
 
     def filter_atoms(self, atoms, atom_ids):
         """
-        @param atoms        the normal ASE Atoms object
-        @param atom_ids     list of atom ids to match
+        Return an Atoms object containing only those from atoms than
+        match the given atom_ids list.
 
-        @return (Atoms, map)
-                            map[i] gives the original index
+        @param atoms:       the normal ASE Atoms object
+        @param atom_ids:    list of atom ids to match
+
+        @rtype:             (Atoms, dict)
+        @return:            map[i] gives the original index
                             of Atoms[i]
         """
         subset = None
@@ -105,8 +113,10 @@ class EnergyCalculation(Calculation):
         Calculates the energy for the subset of atoms
         defined for this EnergyCalculation
 
-        @param atoms                ASE Atoms object
-        @param force_consistent     (ignored, False assumed always)
+        @type atoms:               Atoms
+        @param atoms:               ASE Atoms object
+        @type force_consistent:     Boolean
+        @param force_consistent:    (ignored, False assumed always)
         """
         subset, subset_map = self.get_subset(atoms)
         energy = self.calculator.get_potential_energy(subset)
@@ -125,9 +135,11 @@ class Mixer(Calculator):
     """
     def __init__(self, forces, energies):
         """
-        @param forces           list of Mixer.ForceCalculation to drive force
+        @type forces:           [ForceCalculation]
+        @param forces:          list of Mixer.ForceCalculation to drive force
                                 calculations
-        @param energies         list of Mixer.EnergyCalculation to drive desired
+        @type energies:         [EnergyCalculation]
+        @param energies:        list of Mixer.EnergyCalculation to drive desired
                                 number of energy region calculations
         """
 
@@ -151,8 +163,11 @@ class Mixer(Calculator):
 
     def get_forces(self, atoms):
         """
-        @param atoms        the normal ASE Atoms object
-        @return np.array()  the expected np.array() containing
+        @type atoms:        Atoms
+        @param atoms:       the normal ASE Atoms object
+
+        @rtype:             np.array
+        @return:            the expected np.array containing
                             the forces
         """
         forces = np.zeros((len(atoms), 3))
@@ -162,8 +177,11 @@ class Mixer(Calculator):
 
     def get_potential_energy(self, atoms=None, force_consistent=False):
         """
-        @param atoms        the normal ASE Atoms object
-        @return float       the energy of the system
+        @type atoms:        Atoms
+        @param atoms:       the normal ASE Atoms object
+
+        @rtype:             float
+        @return:            the energy of the system
         """
         energy = 0.0
         for ec in self._energies:
