@@ -1,5 +1,5 @@
 # Copyright (C) 2012 Aalto University
-# Author: lauri.leukkunen@aalto.fi
+# Author: Lauri Leukkunen <lauri.leukkunen@aalto.fi>
 
 from copy import deepcopy
 import numpy as np
@@ -7,10 +7,7 @@ import numpy as np
 from ase import Atoms
 from ase.calculators.interface import Calculator
 
-from gpaw import GPAW
-
 from csmmcalc.lammps.reaxff import ReaxFF
-
 
 class Calculation(object):
     """
@@ -18,12 +15,13 @@ class Calculation(object):
     You don't want to use this directly, instead look into
     ForceCalculation and EnergyCalculation
     """
-    cell = None
-    atom_ids = ()
 
-    def __init__(self):
+    def __init__(self, selector=None):
         self._calculator = None
-
+        self._selector = selector
+        self.cell = None
+        self.coeff = 1.0
+ 
     def _set_calculator(self, value):
         # check that value at least looks like a calculator
         if not (hasattr(value, "calculation_required") and
@@ -38,11 +36,24 @@ class Calculation(object):
     def _del_calculator(self):
         del self._calculator
 
+    def _set_selector(self, value):
+        self._selector = value
+    
+    def _get_selector(self):
+        return self._selector
+
+    def _del_selector(self):
+        del self._selector
+
+
     calculator = property(_get_calculator, _set_calculator, 
             _del_calculator, "Calculator property")
+    
+    selector = property(_get_selector, _set_selector,
+                        _del_selector, "Selector property")
 
     def calculation_required(self, atoms, quantities):
-        subset, subset_map = self.get_subset(atoms)
+        subset, subset_map, weights = self.get_subset(atoms)
         return self.calculator.calculation_required(subset, quantities)
 
     def get_subset(self, atoms):
@@ -62,43 +73,17 @@ class Calculation(object):
                                map[i] gives the original index
                                of Atoms[i] in the atoms list.
         """
-        subset, subset_map = self._filter_atoms(atoms, self.atom_ids)
+
+        if not self._selector:
+            return (atoms, None, {})
+
+        subset, subset_map, weights = self.selector.select_atoms(atoms)
+        if not subset:
+            return None, None, None
         subset.set_cell(self.cell)
         subset.center()
         subset.set_calculator(self.calculator)
-        return subset, subset_map
-
-    def _filter_atoms(self, atoms, atom_ids):
-        """
-        Return an Atoms object containing only those from atoms than
-        match the given atom_ids list. This is a utility function
-        used by get_subset().
-
-        @param atoms:       the normal ASE Atoms object
-        @param atom_ids:    list of atom ids to match
-
-        @rtype:             (Atoms, dict)
-        @return:            map[i] gives the original index
-                            of Atoms[i]
-        """
-        subset = None
-        subset_map = {}
-        k = 0
-        ids = Mixer.get_atom_ids(atoms)
-        for i in range(len(atoms)):
-            if ids[i] not in atom_ids:
-                continue
-
-            if not subset:
-                subset = Atoms(atoms[i:i+1])
-            else:
-                subset.extend(atoms[i:i+1])
-
-            subset_map[k] = i
-            k += 1
-
-        return subset, subset_map
-
+        return subset, subset_map, weights
 
 class ForceCalculation(Calculation):
     """
@@ -115,40 +100,23 @@ class ForceCalculation(Calculation):
     case the calculation is the "outer" calculation in a
     multi-scale setup.
     """
-    default_weight = 0.0
     
-    def __init__(self):
-        self._weights = None
-    
-    def _get_weights(self):
-        return self._weights
-
-    def _set_weights(self, value):
-        # test the sanity of value
-        if not set(value.keys()) <= set(self.atom_ids):
-            raise ValueError("weights set for atoms not in atom_ids")
-        self._weights = value
-
-    def _del_weights(self):
-        del self._weights
-
-    weights = property(_get_weights, _set_weights, 
-                        _del_weights, "Weights property")
+    def __init__(self, filter):
+        super(ForceCalculation, self).__init__(filter)
+        self.default_weight = 0.0
 
     def get_forces(self, atoms):
-        subset, subset_map = self.get_subset(atoms)
-        
+        subset, subset_map, weights = self.get_subset(atoms)
+        res = np.zeros((len(atoms), 3))
+        if not subset:
+            return res
         forces = self.calculator.get_forces(subset)
 
-        weight_array = np.ones_like(forces)
-        for i in range(len(subset)):
-            weight_array[i] = (weight_array[i] *
-                self.weights.get(self.atom_ids[i], self.default_weight))
-        
-        forces *= weight_array
+        if not subset_map:
+            return forces
+        forces = self.coeff * weights * forces
         
         # now map them to the original atom sequence
-        res = np.zeros((len(atoms), 3))
         for i in range(len(subset)):
             res[subset_map[i]] = forces[i]
         
@@ -161,7 +129,8 @@ class EnergyCalculation(Calculation):
     sub-calculators to produce energies for subsets
     of the atoms.
     """
-    coeff = 1.0
+    def __init__(self, filter=None):
+        super(EnergyCalculation, self).__init__(filter)
 
     def get_energy(self, atoms, force_consistent=False):
         """
@@ -173,7 +142,9 @@ class EnergyCalculation(Calculation):
         @type force_consistent:     Boolean
         @param force_consistent:    (ignored, False assumed always)
         """
-        subset, subset_map = self.get_subset(atoms)
+        subset, subset_map, weights = self.get_subset(atoms)
+        if not subset:
+            return 0.0
         energy = self.calculator.get_potential_energy(subset)
         return self.coeff * energy
 
@@ -203,7 +174,6 @@ class Mixer(Calculator):
         
         for c in forces + energies:
             if (c.calculator == None or
-                c.atom_ids == None or
                 c.cell == None):
                 raise ValueError("Invalid/Uninitialized Calculation" +
                     " object passed")
@@ -243,6 +213,7 @@ class Mixer(Calculator):
         energy = 0.0
         for ec in self._energies:
             energy += ec.get_energy(atoms, force_consistent)
+            print("energy: %f" % energy)
         return energy
     
     def set_atoms(self, atoms):
@@ -261,3 +232,4 @@ class Mixer(Calculator):
     @staticmethod
     def get_atom_ids(atoms):
         return list(atoms.get_array("csmmcalc.mixer.atom_ids"))
+

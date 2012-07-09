@@ -1,8 +1,8 @@
 from ase import Atoms
 from gpaw import GPAW
 
-from csmmcalc.mixer.mixer import Mixer
-from csmmcalc.mixer.mixer import EnergyCalculation, ForceCalculation
+from csmmcalc.mixer.selector import AtomListSelector
+from csmmcalc.mixer.mixer import Mixer, EnergyCalculation, ForceCalculation
 from csmmcalc.lammps.reaxff import ReaxFF
 from csmmcalc.utils import get_datafile
 
@@ -26,35 +26,33 @@ calc_1 = GPAW(nbands=2, txt="h2_1.txt")
 calc_2 = ReaxFF(ff_file_path=get_datafile("ffield.reax.new"))
 calc_2_cell = (100*a, 100*a, 100*a)
 
-forces_full_system = ForceCalculation()
+
+filter_full_system = AtomListSelector(Mixer.get_atom_ids(atoms),
+                        {0: 0.0,
+                         1: 1.0})
+
+filter_qm_region = AtomListSelector((0, 1), {0: 1.0, 1: 0.0})
+
+forces_full_system = ForceCalculation(filter_full_system)
 forces_full_system.calculator = calc_2
-forces_full_system.atom_ids = Mixer.get_atom_ids(atoms)
 forces_full_system.cell = calc_2_cell
-forces_full_system.weights = {0: 0.0,
-                              1: 1.0}
 
-forces_qm_region = ForceCalculation()
+forces_qm_region = ForceCalculation(filter_qm_region)
 forces_qm_region.calculator = calc_1
-forces_qm_region.atom_ids = [0, 1]
 forces_qm_region.cell = (a, a, a)
-forces_qm_region.weights = {0: 1.0,
-                            1: 0.0}
 
-energy_full_system_reaxff = EnergyCalculation()
+energy_full_system_reaxff = EnergyCalculation(filter_full_system)
 energy_full_system_reaxff.calculator = calc_2
-energy_full_system_reaxff.atom_ids = Mixer.get_atom_ids(atoms)
 energy_full_system_reaxff.cell = calc_2_cell
 energy_full_system_reaxff.coeff = 1.0
 
-energy_qm_region_reaxff = EnergyCalculation()
+energy_qm_region_reaxff = EnergyCalculation(filter_qm_region)
 energy_qm_region_reaxff.calculator = calc_2
-energy_qm_region_reaxff.atom_ids = [0]
 energy_qm_region_reaxff.cell = calc_2_cell
 energy_qm_region_reaxff.coeff = -1.0
 
-energy_qm_region_gpaw = EnergyCalculation()
+energy_qm_region_gpaw = EnergyCalculation(filter_qm_region)
 energy_qm_region_gpaw.calculator = calc_1
-energy_qm_region_gpaw.atom_ids = [0]
 energy_qm_region_gpaw.cell = (a, a, a)
 energy_qm_region_gpaw.coeff = 1.0
 

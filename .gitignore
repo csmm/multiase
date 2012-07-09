@@ -1,6 +1,5 @@
 epydocs
 *.txt
 *.pyc
-*.pkl
 *.lammps
 .*.swp
