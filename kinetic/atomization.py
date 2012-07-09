@@ -18,19 +18,20 @@ sumW = 0.
 sumTF = 0.
 sumG = 0.
 sumC = 0.
+sumCnew = 0.
 
-data_sum = {'sumW':(sumW),'sumTF':(sumTF),'sumG':(sumG),'sumC':(sumC)}
-sums = np.zeros(4)
+data_sum = {'sumW':(sumW),'sumTF':(sumTF),'sumG':(sumG),'sumC':(sumC),'sumCnew':(sumCnew)}
+sums = np.zeros(5)
 
 #Introduce:
 h = 0.18
 vacuum = 4.5
 
 #Introduce the molecules to be studied:
-MOL = ['CH4']
+MOL = ['F2']
 
 #Introduce the different atoms that are in the molecules:
-ATO = ['C','H','H','H','H']
+ATO = ['F','F']
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%% SUM OF ATOM ENERGIES %%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -39,13 +40,14 @@ ATO = ['C','H','H','H','H']
 #output.close()
 
 
-def run_per_atom(sums,element, sumW, sumTF, sumG, sumC):
+def run_per_atom(sums, element, sumW, sumTF, sumG, sumC, sumCnew):
 
     print 'Processing element %s' % element
 
     fileX = 'data_%s_TF.pkl' % element
     fileX_w = 'data_%s_W.pkl' % element
     fileX_C = 'data_%s_C.pkl' % element
+    fileX_Cnew = 'data_%s_Cnew.pkl' % element
 
     #Getting Weizsacker kinetic energy.
     pkl_file = open(fileX_w, 'rb')
@@ -73,15 +75,23 @@ def run_per_atom(sums,element, sumW, sumTF, sumG, sumC):
 
     Ckin = data_c['Combined kinetic energy']
 
+    #Getting new combined kinetic energy.
+    pkl_file = open(fileX_Cnew, 'rb')
+    data_cnew = pickle.load(pkl_file)
+    pkl_file.close
+
+    Cnewkin = data_cnew['New combined kinetic energy']
+
     sums[0] += Wkin
     sums[1] += TFkin
     sums[2] += Gkin
     sums[3] += Ckin
+    sums[4] += Cnewkin
 
 for e in ATO:
-    run_per_atom(sums,e, sumW, sumTF, sumG, sumC)
+    run_per_atom(sums, e, sumW, sumTF, sumG, sumC, sumCnew)
     
-    data_sum = {'sumW':(sums[0]),'sumTF':(sums[1]),'sumG':(sums[2]),'sumC':(sums[3])}
+    data_sum = {'sumW':(sums[0]),'sumTF':(sums[1]),'sumG':(sums[2]),'sumC':(sums[3]),'sumCnew':(sums[4])}
     
     output = open('sums.pkl', 'wb')
     pickle.dump(data_sum, output)
@@ -94,14 +104,15 @@ Wkin_mol = 0.
 TFkin_mol = 0.
 Gkin_mol = 0.
 Ckin_mol = 0.
+Cnewkin_mol = 0.
 
-
-def run_per_molecule(element, Wkin_mol, TFkin_mol, Gkin_mol, Ckin_mol):
+def run_per_molecule(element, Wkin_mol, TFkin_mol, Gkin_mol, Ckin_mol, Cnewkin_mol):
     print 'Processing molecule %s' % element
 
     fileX = 'data_%s_TF.pkl' % element
     fileX_w = 'data_%s_W.pkl' % element
     fileX_C = 'data_%s_C.pkl' % element
+    fileX_Cnew = 'data_%s_Cnew.pkl' % element
 
     #Getting Weizsacker kinetic energy.
     pkl_file = open(fileX_w, 'rb')
@@ -129,7 +140,14 @@ def run_per_molecule(element, Wkin_mol, TFkin_mol, Gkin_mol, Ckin_mol):
 
     Ckin_mol = data_c['Combined kinetic energy']
 
-    data_mol = {'Wkin_mol':(Wkin_mol),'TFkin_mol':(TFkin_mol),'Gkin_mol':(Gkin_mol),'Ckin_mol':(Ckin_mol)}
+    #Getting new combined kinetic energy.
+    pkl_file = open(fileX_Cnew, 'rb')
+    data_cnew = pickle.load(pkl_file)
+    pkl_file.close()
+
+    Cnewkin_mol = data_cnew['New combined kinetic energy']
+
+    data_mol = {'Wkin_mol':(Wkin_mol),'TFkin_mol':(TFkin_mol),'Gkin_mol':(Gkin_mol),'Ckin_mol':(Ckin_mol),'Cnewkin_mol':(Cnewkin_mol)}
 
     output = open('mol_%s.pkl' % element, 'wb')
     pickle.dump(data_mol, output)
@@ -137,7 +155,7 @@ def run_per_molecule(element, Wkin_mol, TFkin_mol, Gkin_mol, Ckin_mol):
 
 
 for i in MOL:
-    run_per_molecule(i, Wkin_mol, TFkin_mol, Gkin_mol, Ckin_mol)
+    run_per_molecule(i, Wkin_mol, TFkin_mol, Gkin_mol, Ckin_mol, Cnewkin_mol)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% ATOMIZATION ENERGY %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -151,6 +169,7 @@ def run_per_element(element):
     sumG = data_sum['sumG']
     sumW = data_sum['sumW']
     sumC = data_sum['sumC']
+    sumCnew = data_sum['sumCnew']
 
     pkl_file = open('mol_%s.pkl' % element, 'rb')
     data_mol = pickle.load(pkl_file)
@@ -160,18 +179,20 @@ def run_per_element(element):
     Gkin_mol = data_mol['Gkin_mol']
     Wkin_mol = data_mol['Wkin_mol']
     Ckin_mol = data_mol['Ckin_mol']
+    Cnewkin_mol = data_mol['Cnewkin_mol']
 
     print ' ' 
-    print 'sumTf', sumTF
-    print 'sumG', sumG
-    print 'sumW', sumW
-    print 'sumC', sumC
+    print 'sumTf', sumTF*27.211
+    print 'sumG', sumG*27.211
+    print 'sumW', sumW*27.211
+    print 'sumC', sumC*27.211
+    print 'sumCnew', sumCnew*27.211
     print ' '
-    print 'TFkin_mol', TFkin_mol
-    print 'Gkin_mol', Gkin_mol
-    print 'Wkin_mol', Wkin_mol
-    print 'Ckin_mol', Ckin_mol  
-    
+    print 'TFkin_mol', TFkin_mol*27.211
+    print 'Gkin_mol', Gkin_mol*27.211
+    print 'Wkin_mol', Wkin_mol*27.211
+    print 'Ckin_mol', Ckin_mol*27.211  
+    print 'Cnewkin_mol', Cnewkin_mol*27.211
     
     
     print ' '
@@ -181,6 +202,7 @@ def run_per_element(element):
     print 'GAUSS approx:         ', (sumG - Gkin_mol)*27.211, 'eV'
     print 'WEIZSACKER approx:    ', (sumW - Wkin_mol)*27.211, 'eV'
     print 'COMBINED approx:      ', (sumC - Ckin_mol)*27.211, 'eV'
+    print 'NEW COMBINED approx:  ', (sumCnew - Cnewkin_mol)*27.211, 'eV'
     print '%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
 
 for a in MOL:
