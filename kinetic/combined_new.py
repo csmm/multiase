@@ -21,7 +21,7 @@ def run_per_element(element, N):
 
     fileX = 'data_%s_TF.pkl' % element
     fileX_w = 'data_%s_W.pkl' % element
-    fileX_C = 'data_%s_C.pkl' % element
+    fileX_Cnew = 'data_%s_Cnew.pkl' % element
     
     #Getting Weizsacker kinetic energy.
     pkl_file = open(fileX_w, 'rb')
@@ -52,16 +52,16 @@ def run_per_element(element, N):
 
     print ' '
     print '%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
-    print 'Gamma:', gamma
+    print 'Gamma (new):', gamma
     print ' '
-    print 'COMBINED KINETIC ENERGY, %s:' % element, com_kin*27.211
+    print 'NEW COMBINED KINETIC ENERGY, %s:' % element, com_kin*27.211
     print '%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%'
     print ' '
 
-    data_c = {'Combined kinetic energy':(com_kin)}
+    data_cnew = {'New combined kinetic energy':(com_kin)}
 
-    output = open(fileX_C, 'wb')
-    pickle.dump(data_c, output)
+    output = open(fileX_Cnew, 'wb')
+    pickle.dump(data_cnew, output)
     output.close
 
 for e,n in zip(biX,N):
