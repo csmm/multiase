@@ -37,8 +37,8 @@ calc_gpaw = GPAW(nbands=-2, txt="h2_1.txt")
 calc_reaxff_full = ReaxFF(ff_file_path=get_datafile("ffield.reax.new"))
 calc_reaxff_qbox = ReaxFF(ff_file_path=get_datafile("ffield.reax.new"))
 
-filter_full_sys = CalcBox(position=(0,0,0), dim=cell, pbc=(1,1,1))
-filter_qbox = CalcBox(position=(0,0,0), dim=(a,a,a), inner_dim=(a-2,a-2,a-2))
+filter_full_sys = CalcBox(pos=(0,0,0), dim=cell, pbc=(1,1,1))
+filter_qbox = CalcBox(pos=(0,0,0), dim=(a,a,a), inner_dim=(a-2,a-2,a-2))
 
 # full system classical is taken as positive
 forces_full_system = ForceCalculation(filter_full_sys)

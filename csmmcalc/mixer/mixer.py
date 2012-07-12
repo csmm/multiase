@@ -54,6 +54,8 @@ class Calculation(object):
 
     def calculation_required(self, atoms, quantities):
         subset, subset_map, weights = self.get_subset(atoms)
+        if not subset:
+            return False
         return self.calculator.calculation_required(subset, quantities)
 
     def get_subset(self, atoms):
@@ -66,7 +68,7 @@ class Calculation(object):
         @type atoms:           Atoms
         @param atoms:          the normal ASE Atoms object
 
-        @rtype:                (Atoms, dict)
+        @rtype:                (Atoms, dict, list)
         @return:               returns a subset of atoms
                                created with filter_atoms()
                                using self.atom_ids.
