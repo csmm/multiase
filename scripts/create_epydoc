@@ -4,4 +4,4 @@ if [ ! -d ./csmmcalc ]; then
 	echo "Please run $0 from top level of the source tree"
 	exit 1
 fi
-epydoc -o ./epydocs ./csmmcalc
+epydoc --pdf -o ./epydocs ./csmmcalc

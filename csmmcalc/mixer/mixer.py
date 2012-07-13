@@ -215,7 +215,6 @@ class Mixer(Calculator):
         energy = 0.0
         for ec in self._energies:
             energy += ec.get_energy(atoms, force_consistent)
-            print("energy: %f" % energy)
         return energy
     
     def set_atoms(self, atoms):

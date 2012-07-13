@@ -4,6 +4,12 @@
 from ase import Atoms
 from ase.constraints import FixBondLengths
 from ase.data.molecules import molecule
+from ase.md.langevin import Langevin
+from ase.io.trajectory import PickleTrajectory
+from ase import units
+
+import sys
+
 from gpaw import GPAW
 
 from csmmcalc.mixer.mixer import Mixer
@@ -18,7 +24,7 @@ import cPickle as pickle
 
 d = 0.76470
 #d = 1.5
-a = 6.0
+a = 15.0
 
 
 
@@ -38,7 +44,7 @@ calc_reaxff_full = ReaxFF(ff_file_path=get_datafile("ffield.reax.new"))
 calc_reaxff_qbox = ReaxFF(ff_file_path=get_datafile("ffield.reax.new"))
 
 filter_full_sys = CalcBox(pos=(0,0,0), dim=cell, pbc=(1,1,1))
-filter_qbox = CalcBox(pos=(0,0,0), dim=(a,a,a), inner_dim=(a-2,a-2,a-2))
+filter_qbox = CalcBox(pos=(0,0,0), dim=(a,a,a), inner_dim=(a-4,a-4,a-4))
 
 # full system classical is taken as positive
 forces_full_system = ForceCalculation(filter_full_sys)
@@ -72,17 +78,37 @@ energy_qbox_gpaw.calculator = calc_gpaw
 energy_qbox_gpaw.cell = (a+2,a+2,a+2)
 energy_qbox_gpaw.coeff = 1.0
 
+
+# doing just the classical for now
+
 mixer_forces = [forces_full_system,
                 forces_qbox_reaxff,
                 forces_qbox_gpaw]
+#mixer_forces = [forces_full_system]
+
 mixer_energies = [energy_full_system,
                   energy_qbox_reaxff,
                   energy_qbox_gpaw]
+#mixer_energies = [energy_full_system]
 
 
 mixer = Mixer(forces=mixer_forces,
               energies=mixer_energies)
 atoms.set_calculator(mixer)
-print(atoms.get_forces())
-print(atoms.get_potential_energy())
+
+T = 300 # Kelvin
+
+dyn = Langevin(atoms, 0.1*units.fs, T*units.kB, 0.002)
+
+def printenergy(a=atoms):    #store a reference to atoms in the definition.
+    epot = a.get_potential_energy() / len(a)
+    ekin = a.get_kinetic_energy() / len(a)
+    print ("Energy per atom: Epot = %.3feV  Ekin = %.3feV (T=%3.0fK)  Etot = %.3feV" %
+        (epot, ekin, ekin/(1.5*units.kB), epot+ekin))
+
+dyn.attach(printenergy, interval=5)
+traj = PickleTrajectory("/home/lleukkun/wrk/ch4_gas.traj", 'w', atoms)
+dyn.attach(traj.write, interval=5)
+printenergy()
+dyn.run(10000)
 
