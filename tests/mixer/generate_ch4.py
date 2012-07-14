@@ -10,10 +10,18 @@ from ase.constraints import FixBondLengths
 methane_count = 10
 edge = 100.0
 cell = (edge,edge,edge)
-atom_zone = cell
-atoms = molecule("CH4")
-atoms.set_positions(atoms.get_positions() + edge/2.0)
-pos_offset = np.array(atom_zone) * np.random.rand(methane_count, 3)
+
+atoms = Atoms()
+pos_offset = None
+if 0:
+    pos_offset = np.array(atom_zone) * np.random.rand(methane_count, 3)
+else:
+    a = np.zeros((methane_count, 3))
+    step = (edge-20)/(methane_count-1)
+    for i in range(methane_count):
+        a[i][0] = -(edge - 20)/2 + i * step
+    pos_offset = a
+
 for i in range(methane_count - 1): # the first one is already done
     m = molecule("CH4")
     pos = m.get_positions()
@@ -21,7 +29,7 @@ for i in range(methane_count - 1): # the first one is already done
     m.set_positions(pos)
     atoms.extend(m)
 
-atoms.set_positions(atoms.get_positions() - edge/2.0)
+print(atoms.get_positions())
 fd = open("ch4_gas.pkl", "w+")
 pickle.dump(methane_count, fd, -1)
 pickle.dump(cell, fd, -1)

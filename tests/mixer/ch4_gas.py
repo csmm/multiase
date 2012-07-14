@@ -8,6 +8,7 @@ from ase.md.langevin import Langevin
 from ase.io.trajectory import PickleTrajectory
 from ase import units
 
+import os
 import sys
 
 from gpaw import GPAW
@@ -107,7 +108,7 @@ def printenergy(a=atoms):    #store a reference to atoms in the definition.
         (epot, ekin, ekin/(1.5*units.kB), epot+ekin))
 
 dyn.attach(printenergy, interval=5)
-traj = PickleTrajectory("/home/lleukkun/wrk/ch4_gas.traj", 'w', atoms)
+traj = PickleTrajectory("ch4_gas.traj", 'w', atoms)
 dyn.attach(traj.write, interval=5)
 printenergy()
 dyn.run(10000)
