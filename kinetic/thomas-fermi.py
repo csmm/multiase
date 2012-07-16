@@ -12,13 +12,12 @@ from ase.structure import molecule as read_molecule
 
 gridrefinement = 2
 Cf = (3.*((3.*(pi**2.))**(2./3.))/10.)
+Cg = ((3.*pi)/(2.**(5./3.)))
+
 
 #Introduce the element of the molecule:
-#biX = ['O2','HF','H2O','CH4','NH3','CN','CO','F2','HCN','N2']
-#biX = ['CO']
-biX = ['C']
-#Introduce the name of the file for the molecule:
-#fileX = 'data_%s_TF.pkl'
+biX = ['H','B','C','N','O','F','CH4','NH3','H2O','HF','CN','HCN','CO','N2','O2','F2']
+#biX = ['He','Ne','Ar','Kr']
 
 #Introduce:
 h = 0.18
@@ -38,7 +37,7 @@ def run_per_element(element,read_gpw=False):
 
 #    molecule = read('%s.xyz' % element)
      if read_gpw:
-          molecule, calc = restart('%s.gpw' %element)
+          molecule, calc = restart('%s.gpw' % element)
      else:
           molecule = read_molecule('%s' % element)
           set_work_cell(molecule,h,vacuum)
@@ -49,7 +48,7 @@ def run_per_element(element,read_gpw=False):
 
 #    calc = GPAW(h=0.18, nbands=-4, xc='PBE', occupations=FermiDirac(0.0),fixmom=True)
 
-          calc = GPAW(h=0.18, nbands=-4, xc='PBE')
+          calc = GPAW(h=0.18, nbands=-8, xc='PBE')
           if len(molecule)==1: #atom case
                calc.set(hund=True)
 
@@ -83,8 +82,11 @@ def run_per_element(element,read_gpw=False):
      Imolecule = calc.density.finegd.integrate(nmoleculebohrpower_s0)/2.
      Imolecule += calc.density.finegd.integrate(nmoleculebohrpower_s1)/2.
      KIN_TF = Imolecule*Cf*27.211
+     KIN_G = Imolecule*Cg*27.211
 
      print 'Kinetic energy, TF approx.', KIN_TF
+     print 'Kinetic energy, GAUSS approx.', KIN_G
+
 #_______________________________ RESULTS _______________________________
 
      data1 = {'Molecule density':((nmolecule_s0+nmolecule_s1)/2.),'Molecule density power integral':(Imolecule)}
