@@ -29,7 +29,7 @@ a = 15.0
 
 
 
-# a cell full of methane randomly positioned
+# a cell full of methane
 
 # unpickle atoms, methane_count, cell variables
 fd = open("ch4_gas.pkl", "r")
@@ -44,8 +44,8 @@ calc_gpaw = GPAW(nbands=-2, txt="h2_1.txt")
 calc_reaxff_full = ReaxFF(ff_file_path=get_datafile("ffield.reax.new"))
 calc_reaxff_qbox = ReaxFF(ff_file_path=get_datafile("ffield.reax.new"))
 
-filter_full_sys = CalcBox(pos=(0,0,0), dim=cell, pbc=(1,1,1))
-filter_qbox = CalcBox(pos=(0,0,0), dim=(a,a,a), inner_dim=(a-4,a-4,a-4))
+filter_full_sys = CalcBox(pos=(0,0,0), dim=cell, cutoff=2.0, pbc=(1,1,1))
+filter_qbox = CalcBox(pos=(0,0,0), dim=(a,a,a), cutoff=2.0, inner_dim=(a-4,a-4,a-4))
 
 # full system classical is taken as positive
 forces_full_system = ForceCalculation(filter_full_sys)
@@ -82,15 +82,15 @@ energy_qbox_gpaw.coeff = 1.0
 
 # doing just the classical for now
 
-mixer_forces = [forces_full_system,
-                forces_qbox_reaxff,
-                forces_qbox_gpaw]
-#mixer_forces = [forces_full_system]
+#mixer_forces = [forces_full_system,
+#                forces_qbox_reaxff,
+#                forces_qbox_gpaw]
+mixer_forces = [forces_full_system]
 
-mixer_energies = [energy_full_system,
-                  energy_qbox_reaxff,
-                  energy_qbox_gpaw]
-#mixer_energies = [energy_full_system]
+#mixer_energies = [energy_full_system,
+#                  energy_qbox_reaxff,
+#                  energy_qbox_gpaw]
+mixer_energies = [energy_full_system]
 
 
 mixer = Mixer(forces=mixer_forces,

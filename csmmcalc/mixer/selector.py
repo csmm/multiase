@@ -6,6 +6,7 @@ from ase import Atoms
 import numpy as np
 
 from mixer import Mixer
+from spmap import SpatialMap
 
 class AtomSelector(object):
     """
@@ -94,7 +95,7 @@ class CalcRegion(AtomSelector):
     to carve up the system space for different calculators while
     allowing atoms to move around freely.
     """
-    def __init__(self, pos=(0,0,0), pbc=None):
+    def __init__(self, pos=(0,0,0), cutoff=2.0, pbc=None):
         """
         @type pos:      tuple(float, float, float)
         @param pos:     Coordinates for the center of the region
@@ -102,6 +103,7 @@ class CalcRegion(AtomSelector):
         """
         super(CalcRegion, self).__init__()
         self._pos = pos
+        self._cutoff = cutoff
         self._pbc = None
 
     def atom_inside(self, pos):
@@ -128,19 +130,60 @@ class CalcRegion(AtomSelector):
         """
         raise NotImplementedError("Override this")
 
+    def get_bounding_box(self):
+        raise NotImplementedError("Override this")
+
+    def length2(self, a, b):
+        return (a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2
+
     def select_atoms(self, atoms):
         subset = None
         subset_map = {}
         weights = []
-        k = 0
+        cutoff2 = self._cutoff**2
+        p, d = self.get_bounding_box()
+        sm = SpatialMap(pos=p,
+                dim=d,
+                res=(max(d[0],d[1],d[2])/10.0))
+        atom_ids = Mixer.get_atom_ids(atoms)
+        rev_map = {}
+        
         for i in range(len(atoms)):
-            if self.atom_inside(atoms[i].position):
-                if not subset:
-                    subset = atoms[i:i+1]
-                else:
-                    subset.extend(atoms[i:i+1])
-                weights.append(self.get_weight(atoms[i].position))
-            subset_map[k] = i
+            sm.add_object(atom_ids[i], atoms[i].position)
+            rev_map[atom_ids[i]] = i
+        
+        black_list = {}
+        for k in sm.get_objects():
+            black_list[k] = False
+
+        wrk = []
+        for atom_id in sm.get_objects():
+            if not self.atom_inside(atoms[rev_map[atom_id]].position):
+                wrk.push(atom_id)
+                black_list[atom_id] = True
+        while len(wrk) > 0:
+            atom_id = wrk.pop()
+            # add neighbors to wrk
+            neighb = sm.find_objects(atoms[rev_map[atom_id]].position,
+                                     self._cutoff)
+            for n in neighb:
+                if not black_list[n]:
+                    if (self.length2(atoms[rev_map[n]].position,
+                            atoms[rev_map[atom_id]].position) > cutoff2):
+                        continue
+                    wrk.push(n)
+                    black_list[n] = True
+        k = 0
+        for atom_id in sm.get_objects():
+            if black_list[atom_id]:
+                continue
+            if not subset:
+                subset = atoms[rev_map[atom_id]:rev_map[atom_id]+1]
+            else:
+                subset.extend(atoms[rev_map[atom_id]:rev_map[atom_id]+1])
+            weights.append(
+                    self.get_weight(atoms[rev_map[atom_id]].position))
+            subset_map[k] = rev_map[atom_id]
             k += 1
 
         wa = np.zeros((len(weights), 3))
@@ -155,15 +198,16 @@ class CalcRegion(AtomSelector):
 class CalcBox(CalcRegion):
     """
     Atom selector for rectangular volumes with optional transition buffer
-    region. The transition region adjusts weights starting from 0.0 on the outer
-    surface and reaching 1.0 on the inner surface. The volume contained within
-    the inner surface gives weight 1.0.
+    region. The transition region adjusts weights starting from 0.0 on the
+    outer surface and reaching 1.0 on the inner surface. The volume 
+    contained within the inner surface gives weight 1.0.
 
     The volume can be made periodic by setting the pbc parameter for the
     constructor. Its simply passed on to the generated Atoms object, so it
     should adhere to the ASE documentation.
     """
-    def __init__(self, pos=(0,0,0), dim=(1,1,1), inner_dim=None, pbc=None):
+    def __init__(self, pos=(0,0,0), dim=(1,1,1),
+                 inner_dim=None, cutoff=2.0, pbc=None):
         """
         @type pos:          tuple(float, float, float)
         @param pos:         center of the calculation box
@@ -175,7 +219,9 @@ class CalcBox(CalcRegion):
         @param pbc:         periodic boundary condition flags
         """
 
-        super(CalcBox, self).__init__(pos, pbc)
+        super(CalcBox, self).__init__(pos, cutoff=cutoff, pbc=pbc)
+
+        self._dim = dim
 
         self._xmin = pos[0] - dim[0]/2.0
         self._xmax = pos[0] + dim[0]/2.0
@@ -193,6 +239,10 @@ class CalcBox(CalcRegion):
             self._inner_ymax = pos[0] + inner_dim[1]/2.0
             self._inner_zmin = pos[0] - inner_dim[2]/2.0
             self._inner_zmax = pos[0] + inner_dim[2]/2.0
+
+
+    def get_bounding_box(self):
+        return (self._pos, self._dim)
 
     def get_weight(self, pos):
         x, y, z = pos
