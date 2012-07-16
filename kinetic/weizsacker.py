@@ -39,12 +39,8 @@ def calculate_sigma(calc,n_sg,gd):
 gridrefinement = 2
 
 #Introduce the element of the molecule:
-#biX = ['O2','HF','H2O','CH4','NH3','CN','CO','F2','HCN','NO']
-#biX = ['CO']
-biX = ['H']
-
-#Introduce the name of the file for the molecule:
-#fileX_w = 'data_%s_W.pkl'
+biX = ['H','B','C','N','O','F','CH4','NH3','H2O','HF','CN','HCN','CO','N2','O2','F2']
+#biX = ['He','Ne','Ar','Kr']
 
 #Introduce:
 h = 0.18
@@ -69,7 +65,7 @@ def run_per_element(element,read_gpw=False):
     print 'Processing element %s' % element
     fileX_w = 'data_%s_W.pkl' % element
     if read_gpw:
-        molecule,calc = restart('%s.gpw' %element)
+        molecule,calc = restart('%s.gpw' % element)
     else:
         try:
             molecule = read_molecule('%s' % element)
@@ -120,7 +116,7 @@ def run_per_element(element,read_gpw=False):
     output.close
 
 for e in biX:
-    run_per_element(e, read_gpw=True)
+    run_per_element(e, read_gpw=False)
 
     
 
