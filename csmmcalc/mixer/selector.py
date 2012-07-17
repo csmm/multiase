@@ -143,75 +143,135 @@ class CalcRegion(AtomSelector):
         raise NotImplementedError("Override this")
 
     def get_bounding_box(self):
+        """
+        Returns a rectangular bounding box for the CalcRegion.
+        
+        @rtype:             tuple(position,dimensions)
+        @return:            Position and dimensions are both
+                            tuples of three floats. Position
+                            should be the center of the CalcRegion
+                            and dimensions the total lengths of each side.
+        """
         raise NotImplementedError("Override this")
 
     def length2(self, a, b):
+        """
+        Utility function for getting square of distance between
+        two points.
+
+        @type a:            tuple(float, float, float)
+        @param a:           first coordinate
+        @type b:            tuple(float, float, float)
+        @param b:           second coordinate
+
+        @rtype:             float
+        @return:            distance between points a and b
+        """
         return (a[0]-b[0])**2 + (a[1]-b[1])**2 + (a[2]-b[2])**2
 
     def select_atoms(self, atoms):
+        """
+        Return an Atoms object containing only those from atoms that
+        are within the CalcRegion and that don't have an interaction-
+        chain to an atom outside the CalcRegion. This interaction-chain
+        is a chain of atoms within cutoff distance from each other.
+
+        @type atoms:        Atoms
+        @param atoms:       the normal ASE Atoms object
+        @type atom_ids:     list
+        @param atom_ids:    list of atom ids to match
+
+        @rtype:             (Atoms, dict, list)
+        @return:            Atoms provides an ASE Atoms object with the selected
+                            atoms. Dict contains a map, where map[i] gives the
+                            original index of Atoms[i]. List provides force
+                            calculation weights for each atom in Atoms.
+        """
         subset = None
         subset_map = {}
         weights = []
-        cutoff2 = self._cutoff**2
-        p, d = self.get_bounding_box()
-        sm = OctreeNode(pos=p,
+        cutoff2 = self._cutoff**2 # use square for comparison with length2()
+        
+        p, d = self.get_bounding_box() # get the rectangular bounding box
+
+        # create Octree with atoms inside or within cutoff distance from
+        # CalcRegion
+        root = OctreeNode(pos=p,
                 dim=(d[0] + 2*self._cutoff,
                      d[1] + 2*self._cutoff,
                      d[2] + 2*self._cutoff),
                 res=self._cutoff/2.0)
-        atom_ids = Mixer.get_atom_ids(atoms)
-        rev_map = {}
+
+        atom_ids = Mixer.get_atom_ids(atoms) # extract atomids from atoms
+        rev_map = {} # reverse map used to get from atom_ids to atoms[] indexes
         
         for i in range(len(atoms)):
-            sm.add_object(atom_ids[i], atoms[i].position)
+            root.add_object(atom_ids[i], atoms[i].position)
             rev_map[atom_ids[i]] = i
         
-        black_list = {}
-        for k in sm.get_objects():
+        black_list = {} # blacklist of atoms with interaction-chain to outside
+        for k in root.get_objects():
             black_list[k] = False
 
-        wrk = []
-        for atom_id in sm.get_objects():
-            if not self.atom_inside(atoms[rev_map[atom_id]].position):
-                wrk.append(atom_id)
-                black_list[atom_id] = True
+        wrk = [] # stack for holding blacklisted atoms whose neighbours
+                 # need to be checked 
 
+        # populate wrk with those atoms outside CalcRegion that are still
+        # within cutoff distance from it
+        for atom_id in root.get_objects():
+            if self.atom_inside(atoms[rev_map[atom_id]].position):
+                continue
+            wrk.append(atom_id)
+            black_list[atom_id] = True
+
+        # loop until wrk is empty, any not-blacklisted neighbours within
+        # cutoff distance from atoms that are blacklisted will be blacklisted
+        # and pushed to wrk
         while len(wrk) > 0:
             atom_id = wrk.pop()
-            # add neighbors to wrk
-            neighb = sm.find_objects(atoms[rev_map[atom_id]].position,
+            
+            # find neighbours within cutoff
+            ns = root.find_objects(atoms[rev_map[atom_id]].position,
                                      self._cutoff)
-            for n in neighb:
-                if not black_list[n]:
-                    if (self.length2(atoms[rev_map[n]].position,
-                            atoms[rev_map[atom_id]].position) > cutoff2):
-                        continue
-                    wrk.append(n)
-                    black_list[n] = True
+            for n in ns:
+                if black_list[n]: # already blacklisted, ignore
+                    continue
+                if (self.length2(atoms[rev_map[n]].position,
+                    atoms[rev_map[atom_id]].position) > cutoff2):
+                    # outside cutoff distance, ignore
+                    continue
+                # not blacklisted, within cutoff, add to wrk
+                # and blacklist
+                wrk.append(n)
+                black_list[n] = True
 
         k = 0
-        for atom_id in sm.get_objects():
-            if black_list[atom_id]:
+        subset = Atoms()
+        # construct cleaned up subset of atoms within the CalcRegion
+        for atom_id in root.get_objects():
+            if black_list[atom_id]: # exclude blacklisted atom
                 if self._debug > 0:
-                    print("ejecting atom: %i" % atom_id)
+                    print("excluding atom: %i" % atom_id)
                 continue
-            if not subset:
-                subset = atoms[rev_map[atom_id]:rev_map[atom_id]+1]
-            else:
-                subset.extend(atoms[rev_map[atom_id]:rev_map[atom_id]+1])
+            subset.extend(atoms[rev_map[atom_id]:rev_map[atom_id]+1])
             weights.append(
                     self.get_weight(atoms[rev_map[atom_id]].position))
             subset_map[k] = rev_map[atom_id]
             k += 1
 
+        # create weights array that matches subset
         wa = np.zeros((len(weights), 3))
         for i in range(len(weights)):
             wa[i] += weights[i]
         
+        # set periodic boundary condition
         if self._pbc:
             subset.set_pbc(self._pbc)
-        if not self._debug_traj == None:
+
+        # dump CalcRegion contents to a trajectory file if debugging
+        if self._debug_traj != None:
             self._debug_traj.write(subset)
+
         return subset, subset_map, wa
 
 
@@ -223,7 +283,7 @@ class CalcBox(CalcRegion):
     contained within the inner surface gives weight 1.0.
 
     The volume can be made periodic by setting the pbc parameter for the
-    constructor. Its simply passed on to the generated Atoms object, so it
+    constructor. It's simply passed on to the generated Atoms object, so it
     should adhere to the ASE documentation.
     """
     def __init__(self, pos=(0,0,0), dim=(1,1,1),
