@@ -3,13 +3,29 @@
 
 
 class OctreeNode(object):
+    """
+    OctreeNode divides 3D cartesian space into 2x2x2 grid of 8 blocks which are
+    bound to child nodes (subnodes in this source file). Child nodes are only
+    created as needed and each object stored in the datastructure will reside in
+    a leaf node. The degree (or depth) of the Octree is determined by the
+    resolution desired.  More accurate octrees require a deeper chain of inner
+    nodes to reach a granularity of space that is equal or better than the given
+    resolution.
+
+    Each node's position in space is given by the central point of the volume it
+    occupies. The dimensions are given as the full length of each side of the 3D
+    box.
+
+    Objects are stored in python set()s, so each leaf node can contain the same
+    object only once. This is done for performance reasons.
+    """
     def __init__(self, pos=(0,0,0), dim=(2,2,2), res=1.0):
         super(OctreeNode, self).__init__()
         self._pos = pos
         self._dim = dim
         self._res = res
         self._subnodes = None
-        self._objects = []
+        self._objects = set()
         if (res < dim[0] or
             res < dim[1] or
             res < dim[2]):
@@ -38,7 +54,7 @@ class OctreeNode(object):
             pos[2] > self._pos[2] + self._dim[2]/2.0):
             return
         if self._subnodes == None:
-            self._objects.append(obj)
+            self._objects.add(obj)
             return
 
         i,j,k = self.get_subnode_addr(pos)
@@ -65,17 +81,24 @@ class OctreeNode(object):
     def get_objects(self):
         if not self._subnodes:
             return self._objects
-        res = []
+        res = set()
         for s1 in self._subnodes:
             for s2 in s1:
                 for s3 in s2:
                     if s3 == 0:
                         continue
-                    res += s3.get_objects()
+                    res = res.union(s3.get_objects())
         return res
 
     def _get_flags(self, pos, coord, reach):
         flags = [0, 0]
+        
+        # first check if search is within our volume
+        if pos[coord] + reach < self._pos[coord] - self._dim[coord]/2.0:
+            return flags
+        if pos[coord] - reach > self._pos[coord] + self._dim[coord]/2.0:
+            return flags
+
         if pos[coord] < self._pos[coord]:
             if pos[coord] + reach > self._pos[coord]:
                 # get both splits
@@ -103,7 +126,7 @@ class OctreeNode(object):
         y_flags = self._get_flags(pos, 1, reach)
         z_flags = self._get_flags(pos, 2, reach)
 
-        res = [] 
+        res = set()
    
         for i in range(2):
             for j in range(2):
@@ -111,28 +134,30 @@ class OctreeNode(object):
                     if x_flags[i] and y_flags[j] and z_flags[k]:
                         if self._subnodes[i][j][k] == 0:
                             continue
-                        res += (
+                        res = res.union(
                             self._subnodes[i][j][k].find_objects(pos, reach))
         return res
 
 
 if __name__ == "__main__":
     edge = 100.0
-    count = 40
-    root = OctreeNode((0,0,0), (edge, edge, edge), res=2.0)
+    count = 100
+    root = OctreeNode((0,0,0), (edge, edge, edge), res=5)
     import numpy as np
     x = np.linspace(-edge/2.0, edge/2.0, count)
     y = np.linspace(-edge/2.0, edge/2.0, count)
     z = np.linspace(-edge/2.0, edge/2.0, count)
 
     print("octree created")
+    i = 0
     for xi in x:
         for yi in y:
             for zi in z:
                 pos = (xi, yi, zi)
-                root.add_object(5, pos)
+                root.add_object(i, pos)
+                i += 1
 
     print("objects added")
     print("total objects: %i" % len(root.get_objects()))
-    subset = root.find_objects((.5,.5,.5), 10)
+    subset = root.find_objects((0.,0.,0.), 10.)
     print("found objects: %i" % len(subset))

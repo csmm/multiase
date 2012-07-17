@@ -20,13 +20,11 @@ class AtomSelector(object):
     """
     def select_atoms(self, atoms):
         """
-        Return an Atoms object containing only those from atoms than
-        match the atom_ids list.
+        Return an Atoms object containing only those from atoms that
+        match the selection criteria of the AtomSelector object.
 
         @type atoms:        Atoms
         @param atoms:       the normal ASE Atoms object
-        @type atom_ids:     list
-        @param atom_ids:    list of atom ids to match
 
         @rtype:             (Atoms, dict, list)
         @return:            Atoms provides an ASE Atoms object with the selected
@@ -230,7 +228,7 @@ class CalcRegion(AtomSelector):
         while len(wrk) > 0:
             atom_id = wrk.pop()
             
-            # find neighbours within cutoff
+            # find neighbours approximately within cutoff
             ns = root.find_objects(atoms[rev_map[atom_id]].position,
                                      self._cutoff)
             for n in ns:
