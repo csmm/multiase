@@ -1,12 +1,16 @@
 # Copyright (C) 2012 Aalto University
 # Author: Lauri Leukkunen <lauri.leukkunen@aalto.fi>
 
+import tempfile
+import os
 
 from ase import Atoms
+from ase.io.trajectory import PickleTrajectory
+
 import numpy as np
 
 from mixer import Mixer
-from spmap import SpatialMap
+from octree import OctreeNode
 
 class AtomSelector(object):
     """
@@ -95,7 +99,7 @@ class CalcRegion(AtomSelector):
     to carve up the system space for different calculators while
     allowing atoms to move around freely.
     """
-    def __init__(self, pos=(0,0,0), cutoff=2.0, pbc=None):
+    def __init__(self, pos=(0,0,0), cutoff=2.0, pbc=None, debug=0):
         """
         @type pos:      tuple(float, float, float)
         @param pos:     Coordinates for the center of the region
@@ -105,6 +109,14 @@ class CalcRegion(AtomSelector):
         self._pos = pos
         self._cutoff = cutoff
         self._pbc = None
+        self._debug = debug
+        if self._debug > 1:
+            print("Enabling debug")
+            f, fname = tempfile.mkstemp(suffix=".traj",
+                                  prefix="calcregion_debug-",
+                                  dir=".")
+            os.close(f)
+            self._debug_traj = PickleTrajectory(fname, "w", backup=False)
 
     def atom_inside(self, pos):
         """
@@ -142,9 +154,11 @@ class CalcRegion(AtomSelector):
         weights = []
         cutoff2 = self._cutoff**2
         p, d = self.get_bounding_box()
-        sm = SpatialMap(pos=p,
-                dim=d,
-                res=(max(d[0],d[1],d[2])/10.0))
+        sm = OctreeNode(pos=p,
+                dim=(d[0] + 2*self._cutoff,
+                     d[1] + 2*self._cutoff,
+                     d[2] + 2*self._cutoff),
+                res=self._cutoff/2.0)
         atom_ids = Mixer.get_atom_ids(atoms)
         rev_map = {}
         
@@ -159,8 +173,9 @@ class CalcRegion(AtomSelector):
         wrk = []
         for atom_id in sm.get_objects():
             if not self.atom_inside(atoms[rev_map[atom_id]].position):
-                wrk.push(atom_id)
+                wrk.append(atom_id)
                 black_list[atom_id] = True
+
         while len(wrk) > 0:
             atom_id = wrk.pop()
             # add neighbors to wrk
@@ -171,11 +186,14 @@ class CalcRegion(AtomSelector):
                     if (self.length2(atoms[rev_map[n]].position,
                             atoms[rev_map[atom_id]].position) > cutoff2):
                         continue
-                    wrk.push(n)
+                    wrk.append(n)
                     black_list[n] = True
+
         k = 0
         for atom_id in sm.get_objects():
             if black_list[atom_id]:
+                if self._debug > 0:
+                    print("ejecting atom: %i" % atom_id)
                 continue
             if not subset:
                 subset = atoms[rev_map[atom_id]:rev_map[atom_id]+1]
@@ -192,6 +210,8 @@ class CalcRegion(AtomSelector):
         
         if self._pbc:
             subset.set_pbc(self._pbc)
+        if not self._debug_traj == None:
+            self._debug_traj.write(subset)
         return subset, subset_map, wa
 
 
@@ -207,7 +227,7 @@ class CalcBox(CalcRegion):
     should adhere to the ASE documentation.
     """
     def __init__(self, pos=(0,0,0), dim=(1,1,1),
-                 inner_dim=None, cutoff=2.0, pbc=None):
+                 inner_dim=None, cutoff=2.0, pbc=None, debug=0):
         """
         @type pos:          tuple(float, float, float)
         @param pos:         center of the calculation box
@@ -219,7 +239,7 @@ class CalcBox(CalcRegion):
         @param pbc:         periodic boundary condition flags
         """
 
-        super(CalcBox, self).__init__(pos, cutoff=cutoff, pbc=pbc)
+        super(CalcBox, self).__init__(pos, cutoff=cutoff, pbc=pbc, debug=debug)
 
         self._dim = dim
 

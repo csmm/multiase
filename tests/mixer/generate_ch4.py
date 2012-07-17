@@ -7,7 +7,7 @@ from ase.structure import molecule
 from ase import Atoms
 from ase.constraints import FixBondLengths
 
-methane_count = 10
+methane_count = 20
 edge = 100.0
 cell = (edge,edge,edge)
 
@@ -22,7 +22,7 @@ else:
         a[i][0] = -(edge - 20)/2 + i * step
     pos_offset = a
 
-for i in range(methane_count - 1): # the first one is already done
+for i in range(methane_count):
     m = molecule("CH4")
     pos = m.get_positions()
     pos += pos_offset[i]

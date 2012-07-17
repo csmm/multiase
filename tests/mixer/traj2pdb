@@ -1,0 +1,5 @@
+#!/bin/sh
+
+for f in *.traj; do
+	ag $f -o ${f%.traj}.pdb
+done
