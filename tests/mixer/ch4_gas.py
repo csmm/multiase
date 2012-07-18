@@ -5,6 +5,8 @@ from ase import Atoms
 from ase.constraints import FixBondLengths
 from ase.data.molecules import molecule
 from ase.md.langevin import Langevin
+from ase.md.verlet import VelocityVerlet
+from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.io.trajectory import PickleTrajectory
 from ase import units
 
@@ -23,11 +25,14 @@ from csmmcalc.mixer.selector import CalcBox
 import numpy as np
 import cPickle as pickle
 
-d = 0.76470
-#d = 1.5
+
+# PARAMETERS
 a = 20.0
-
-
+calc_style = "classical" # "combined", "classical"
+md_style = "Verlet" # "Verlet", "Langevin"
+T = 300 # Kelvin
+timestep = 0.1*units.fs
+# END OF PARAMETERS
 
 # a cell full of methane
 
@@ -55,7 +60,7 @@ forces_full_system = ForceCalculation(filter_full_sys)
 forces_full_system.calculator = calc_reaxff_full
 forces_full_system.cell = cell
 
-# quantum box classical is deducted using the qbox weights
+# quantum box classical is subtracted using the qbox weights
 forces_qbox_reaxff = ForceCalculation(filter_qbox)
 forces_qbox_reaxff.calculator = calc_reaxff_qbox
 forces_qbox_reaxff.cell = cell
@@ -82,27 +87,34 @@ energy_qbox_gpaw.calculator = calc_gpaw
 energy_qbox_gpaw.cell = (a+2,a+2,a+2)
 energy_qbox_gpaw.coeff = 1.0
 
+mixer_forces = []
+mixer_energies = []
 
-# doing just the classical for now
+if calc_style == "combined":
+    mixer_forces = [forces_full_system,
+                    forces_qbox_reaxff,
+                    forces_qbox_gpaw]
 
-mixer_forces = [forces_full_system,
-                forces_qbox_reaxff,
-                forces_qbox_gpaw]
-#mixer_forces = [forces_full_system]
-
-mixer_energies = [energy_full_system,
-                  energy_qbox_reaxff,
-                  energy_qbox_gpaw]
-#mixer_energies = [energy_full_system]
+    mixer_energies = [energy_full_system,
+                      energy_qbox_reaxff,
+                      energy_qbox_gpaw]
+elif calc_style == "classical":
+    mixer_forces = [forces_full_system]
+    mixer_energies = [energy_full_system]
 
 
 mixer = Mixer(forces=mixer_forces,
               energies=mixer_energies)
 atoms.set_calculator(mixer)
 
-T = 300 # Kelvin
+dyn = None
 
-dyn = Langevin(atoms, 0.1*units.fs, T*units.kB, 0.002)
+if md_style == "Langevin":
+    dyn = Langevin(atoms, timestep, 1.5*T*units.kB, 0.002)
+elif md_style == "Verlet":
+    # set momenta to match temperature T
+    MaxwellBoltzmannDistribution(atoms, 1.5*T*units.kB)
+    dyn = VelocityVerlet(atoms, timestep)
 
 def printenergy(a=atoms):    #store a reference to atoms in the definition.
     epot = a.get_potential_energy() / len(a)
@@ -110,9 +122,9 @@ def printenergy(a=atoms):    #store a reference to atoms in the definition.
     print ("Energy per atom: Epot = %.3feV  Ekin = %.3feV (T=%3.0fK)  Etot = %.3feV" %
         (epot, ekin, ekin/(1.5*units.kB), epot+ekin))
 
-dyn.attach(printenergy, interval=5)
+dyn.attach(printenergy, interval=25)
 traj = PickleTrajectory("ch4_gas.traj", 'w', atoms)
-dyn.attach(traj.write, interval=5)
+dyn.attach(traj.write, interval=25)
 printenergy()
 dyn.run(10000)
 

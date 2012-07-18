@@ -44,7 +44,6 @@ class OctreeNode(object):
 
 
     def add_object(self, obj, pos):
-        #print("adding object: (%f, %f, %f)" % pos)
         # check pos is within the node
         if (pos[0] < self._pos[0] - self._dim[0]/2.0 or
             pos[0] > self._pos[0] + self._dim[0]/2.0 or
