@@ -30,13 +30,16 @@ def set_work_cell(molecule,h,vacuum):
      molecule.set_cell(cell)
      return
 
-def run_per_element(element,read_gpw=False):
+def run_per_element(element,read_gpw=False, read_xyz=False):
      print 'Processing element %s' % element
      fileX = 'data_%s_TF.pkl' % element
 
 #    molecule = read('%s.xyz' % element)
      if read_gpw:
           molecule, calc = restart('%s.gpw' % element)
+     elif read_xyz:
+          molecule = read('%s.xyz' % element)
+          set_work_cell(molecule,h,vacuum)
      else:
           molecule = read_molecule('%s' % element)
           set_work_cell(molecule,h,vacuum)
@@ -95,4 +98,4 @@ def run_per_element(element,read_gpw=False):
      output.close()
      
 for e in biX:
-     run_per_element(e,read_gpw=True)
+     run_per_element(e,read_gpw=False,read_xyz=True)
