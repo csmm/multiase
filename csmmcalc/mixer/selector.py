@@ -108,6 +108,7 @@ class CalcRegion(AtomSelector):
         self._cutoff = cutoff
         self._pbc = None
         self._debug = debug
+        self._debug_traj = None
         if self._debug > 1:
             print("Enabling debug")
             f, fname = tempfile.mkstemp(suffix=".traj",

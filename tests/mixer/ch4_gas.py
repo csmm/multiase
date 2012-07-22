@@ -9,6 +9,7 @@ from ase.md.verlet import VelocityVerlet
 from ase.md.velocitydistribution import MaxwellBoltzmannDistribution
 from ase.io.trajectory import PickleTrajectory
 from ase import units
+from gpaw.mpi import rank
 
 import os
 import sys
@@ -28,11 +29,16 @@ import cPickle as pickle
 
 # PARAMETERS
 a = 20.0
-calc_style = "classical" # "combined", "classical"
+calc_style = "combined" # "combined", "classical", "quantum"
 md_style = "Verlet" # "Verlet", "Langevin"
 T = 300 # Kelvin
 timestep = 0.1*units.fs
 # END OF PARAMETERS
+
+# verify that MPI is actually working
+print("rank: %i" % rank)
+
+
 
 # a cell full of methane
 
@@ -45,15 +51,17 @@ fd.close()
 
 Mixer.set_atom_ids(atoms) # this one is important!
 
-calc_gpaw = GPAW(nbands=-2, txt="h2_1.txt")
-calc_reaxff_full = ReaxFF(ff_file_path=get_datafile("ffield.reax.new"))
-calc_reaxff_qbox = ReaxFF(ff_file_path=get_datafile("ffield.reax.new"))
+calc_gpaw = GPAW(nbands=-2, txt="h2_1_%i.txt" % rank)
+calc_reaxff_full = ReaxFF(ff_file_path=get_datafile("ffield.reax.new"),
+                          implementation="C")
+calc_reaxff_qbox = ReaxFF(ff_file_path=get_datafile("ffield.reax.new"),
+                          implementation="C")
 
 filter_full_sys = CalcBox(pos=(0,0,0), dim=cell, cutoff=2.0, pbc=(1,1,1),
-                          debug=2)
+                          debug=0)
 filter_qbox = CalcBox(pos=(0,0,0), dim=(a,a,a),
         cutoff=2.0, inner_dim=(a-4,a-4,a-4),
-        debug=2)
+        debug=0)
 
 # full system classical is taken as positive
 forces_full_system = ForceCalculation(filter_full_sys)
@@ -101,7 +109,9 @@ if calc_style == "combined":
 elif calc_style == "classical":
     mixer_forces = [forces_full_system]
     mixer_energies = [energy_full_system]
-
+elif calc_style == "quantum":
+    mixer_forces = [forces_qbox_gpaw]
+    mixer_energies = [energy_qbox_gpaw]
 
 mixer = Mixer(forces=mixer_forces,
               energies=mixer_energies)
@@ -119,12 +129,14 @@ elif md_style == "Verlet":
 def printenergy(a=atoms):    #store a reference to atoms in the definition.
     epot = a.get_potential_energy() / len(a)
     ekin = a.get_kinetic_energy() / len(a)
-    print ("Energy per atom: Epot = %.3feV  Ekin = %.3feV (T=%3.0fK)  Etot = %.3feV" %
+    print("Energy per atom: Epot = %.3feV  Ekin = %.3feV (T=%3.0fK)  Etot = %.3feV" %
         (epot, ekin, ekin/(1.5*units.kB), epot+ekin))
 
-dyn.attach(printenergy, interval=25)
-traj = PickleTrajectory("ch4_gas.traj", 'w', atoms)
-dyn.attach(traj.write, interval=25)
-printenergy()
+if rank == 0:
+    dyn.attach(printenergy, interval=25)
+    traj = PickleTrajectory("ch4_gas.traj", 'w', atoms)
+    dyn.attach(traj.write, interval=25)
+    printenergy()
+
 dyn.run(10000)
 
