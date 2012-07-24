@@ -27,10 +27,11 @@ class AtomSelector(object):
         @param atoms:       the normal ASE Atoms object
 
         @rtype:             (Atoms, dict, list)
-        @return:            Atoms provides an ASE Atoms object with the selected
-                            atoms. Dict contains a map, where map[i] gives the
-                            original index of Atoms[i]. List provides force
-                            calculation weights for each atom in Atoms.
+        @return:            Atoms provides an ASE Atoms object with
+                            the selected atoms. Dict contains a map,
+                            where map[i] gives the original index of
+                            Atoms[i]. List provides force calculation
+                            weights for each atom in Atoms.
         """
         raise NotImplementedError("Override this")
 
@@ -177,14 +178,12 @@ class CalcRegion(AtomSelector):
 
         @type atoms:        Atoms
         @param atoms:       the normal ASE Atoms object
-        @type atom_ids:     list
-        @param atom_ids:    list of atom ids to match
 
         @rtype:             (Atoms, dict, list)
-        @return:            Atoms provides an ASE Atoms object with the selected
-                            atoms. Dict contains a map, where map[i] gives the
-                            original index of Atoms[i]. List provides force
-                            calculation weights for each atom in Atoms.
+        @return:            Atoms provides an ASE Atoms object with the
+                            selected atoms. Dict contains a map, where map[i]
+                            gives the original index of Atoms[i]. List provides
+                            force calculation weights for each atom in Atoms.
         """
         subset = None
         subset_map = {}
@@ -199,7 +198,7 @@ class CalcRegion(AtomSelector):
                 dim=(d[0] + 2*self._cutoff,
                      d[1] + 2*self._cutoff,
                      d[2] + 2*self._cutoff),
-                res=self._cutoff/2.0)
+                res=max(self._cutoff/2.0, 0.1))
 
         atom_ids = Mixer.get_atom_ids(atoms) # extract atomids from atoms
         rev_map = {} # reverse map used to get from atom_ids to atoms[] indexes

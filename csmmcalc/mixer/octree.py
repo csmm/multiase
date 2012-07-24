@@ -138,25 +138,3 @@ class OctreeNode(object):
         return res
 
 
-if __name__ == "__main__":
-    edge = 100.0
-    count = 100
-    root = OctreeNode((0,0,0), (edge, edge, edge), res=5)
-    import numpy as np
-    x = np.linspace(-edge/2.0, edge/2.0, count)
-    y = np.linspace(-edge/2.0, edge/2.0, count)
-    z = np.linspace(-edge/2.0, edge/2.0, count)
-
-    print("octree created")
-    i = 0
-    for xi in x:
-        for yi in y:
-            for zi in z:
-                pos = (xi, yi, zi)
-                root.add_object(i, pos)
-                i += 1
-
-    print("objects added")
-    print("total objects: %i" % len(root.get_objects()))
-    subset = root.find_objects((0.,0.,0.), 10.)
-    print("found objects: %i" % len(subset))
