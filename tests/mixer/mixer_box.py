@@ -57,6 +57,7 @@ md_style = "Verlet" # "Verlet", "Langevin"
 timestep = 0.1*units.fs
 output_file = "mixer_box.traj"
 input_file = None
+debug = 0
 # END OF PARAMETERS
 
 for o, a in opts:
@@ -102,33 +103,33 @@ filter_qbox = CalcBox(pos=(0,0,0), dim=(s,s,s),
         debug=debug)
 
 # full system classical is taken as positive
-forces_full_system = ForceCalculation(filter_full_sys)
+forces_full_system = ForceCalculation("force_full", filter_full_sys)
 forces_full_system.calculator = calc_reaxff_full
 forces_full_system.cell = cell
 
 # quantum box classical is subtracted using the qbox weights
-forces_qbox_reaxff = ForceCalculation(filter_qbox)
+forces_qbox_reaxff = ForceCalculation("force_qbox_reax", filter_qbox)
 forces_qbox_reaxff.calculator = calc_reaxff_qbox
 forces_qbox_reaxff.cell = cell
 forces_qbox_reaxff.coeff = -1.0
 
 # quantum box quantum is added using qbox weights
-forces_qbox_gpaw = ForceCalculation(filter_qbox)
+forces_qbox_gpaw = ForceCalculation("force_qbox_gpaw", filter_qbox)
 forces_qbox_gpaw.calculator = calc_gpaw
 forces_qbox_gpaw.cell = (s+2,s+2,s+2)
 
 # energies are based on H = H_c + H_q' - H_c'
-energy_full_system = EnergyCalculation(filter_full_sys)
+energy_full_system = EnergyCalculation("energy_full", filter_full_sys)
 energy_full_system.calculator = calc_reaxff_full
 energy_full_system.cell = cell
 energy_full_system.coeff = 1.0
 
-energy_qbox_reaxff = EnergyCalculation(filter_qbox)
+energy_qbox_reaxff = EnergyCalculation("energy_qbox_reax", filter_qbox)
 energy_qbox_reaxff.calculator = calc_reaxff_qbox
 energy_qbox_reaxff.cell = cell
 energy_qbox_reaxff.coeff = -1.0
 
-energy_qbox_gpaw = EnergyCalculation(filter_qbox)
+energy_qbox_gpaw = EnergyCalculation("energy_qbox_gpaw", filter_qbox)
 energy_qbox_gpaw.calculator = calc_gpaw
 energy_qbox_gpaw.cell = (s+2,s+2,s+2)
 energy_qbox_gpaw.coeff = 1.0

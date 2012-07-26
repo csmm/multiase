@@ -240,16 +240,17 @@ class Mixer(Calculator):
         """
         forces = np.zeros((len(atoms), 3))
         debug_forces = None
-        if debug > 1:
-            debug_forces = np.array(Mixer.get_atom_ids(atoms), dtype=float)
+        if self._debug > 1:
+            debug_forces = np.array(Mixer.get_atom_ids(atoms),
+                    dtype=float).reshape((len(atoms), 1))
         
         for i in range(len(self._forces)):
             sub_forces = self._forces[i].get_forces(atoms)
-            if debug > 1:
+            if self._debug > 1:
                 debug_forces = np.append(debug_forces, sub_forces, axis=1)
             forces += sub_forces
 
-        if debug > 1:
+        if self._debug > 1:
             debug_forces = np.append(debug_forces, forces, axis=1)
             np.savetxt(self._debug_file, debug_forces, delimiter=",", fmt="%5.5e")
         return forces
