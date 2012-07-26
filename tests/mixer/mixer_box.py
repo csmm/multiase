@@ -26,21 +26,61 @@ from csmmcalc.mixer.selector import CalcBox
 import numpy as np
 import cPickle as pickle
 
+import getopt, sys
+
+
+def usage():
+    print("""
+python mixer_box.py [-h -c -q -d N -i input.traj -o output.traj]
+    -h              help
+    -c              plain classical simulation
+    -q              plain quantum simulation
+    -d N            debug level
+    -i input.traj   input trajectory file
+    -o output.traj  output trajectory file
+    """)
+
+try:
+    opts, args = getopt.getopt(sys.argv[1:],
+            "hcqo:d:i:",["help", "classical", "quantum",
+                       "output=", "debug", "input="])
+except getopt.GetoptError, err:
+    print(str(err))
+    usage()
+    sys.exit(2)
 
 # PARAMETERS
-a = 10.0
+s = 10.0
 cell = (120.0, 120.0, 120.0)
 calc_style = "combined" # "combined", "classical", "quantum"
 md_style = "Verlet" # "Verlet", "Langevin"
 timestep = 0.1*units.fs
+output_file = "mixer_box.traj"
+input_file = None
 # END OF PARAMETERS
+
+for o, a in opts:
+    if o == "-d":
+        debug = int(a)
+    if o == "-h":
+        usage()
+        sys.exit(0)
+    if o == "-c":
+        calc_style = "classical"
+    if o == "-q":
+        calc_style = "quantum"
+    if o == "-o":
+        output_file = a
+    if o == "-i":
+        input_file = a
+
 
 # verify that MPI is actually working
 print("rank: %i" % rank)
 
 
 
-pt = PickleTrajectory(sys.argv[1], "r")
+pt = PickleTrajectory(input_file, "r")
 atoms = pt[-1] # get the last step
 
 Mixer.set_atom_ids(atoms) # this one is important!
@@ -56,9 +96,9 @@ if rank == 0:
     debug = 2
 
 filter_full_sys = CalcBox(pos=(0,0,0), dim=cell, cutoff=2.0, pbc=(1,1,1),
-                          debug=0)
-filter_qbox = CalcBox(pos=(0,0,0), dim=(a,a,a),
-        cutoff=2.0, inner_dim=(a-4,a-4,a-4),
+                          debug=2)
+filter_qbox = CalcBox(pos=(0,0,0), dim=(s,s,s),
+        cutoff=2.0, inner_dim=(s-4,s-4,s-4),
         debug=debug)
 
 # full system classical is taken as positive
@@ -75,7 +115,7 @@ forces_qbox_reaxff.coeff = -1.0
 # quantum box quantum is added using qbox weights
 forces_qbox_gpaw = ForceCalculation(filter_qbox)
 forces_qbox_gpaw.calculator = calc_gpaw
-forces_qbox_gpaw.cell = (a+2,a+2,a+2)
+forces_qbox_gpaw.cell = (s+2,s+2,s+2)
 
 # energies are based on H = H_c + H_q' - H_c'
 energy_full_system = EnergyCalculation(filter_full_sys)
@@ -90,7 +130,7 @@ energy_qbox_reaxff.coeff = -1.0
 
 energy_qbox_gpaw = EnergyCalculation(filter_qbox)
 energy_qbox_gpaw.calculator = calc_gpaw
-energy_qbox_gpaw.cell = (a+2,a+2,a+2)
+energy_qbox_gpaw.cell = (s+2,s+2,s+2)
 energy_qbox_gpaw.coeff = 1.0
 
 mixer_forces = []
@@ -112,7 +152,8 @@ elif calc_style == "quantum":
     mixer_energies = [energy_qbox_gpaw]
 
 mixer = Mixer(forces=mixer_forces,
-              energies=mixer_energies)
+              energies=mixer_energies,
+              debug=2)
 atoms.set_calculator(mixer)
 
 dyn = None
@@ -130,7 +171,7 @@ def printenergy(a=atoms):    #store a reference to atoms in the definition.
 
 if rank == 0:
     dyn.attach(printenergy, interval=1)
-    traj = PickleTrajectory("ch4_gas.traj", 'w', atoms)
+    traj = PickleTrajectory(output_file, 'w', atoms)
     dyn.attach(traj.write, interval=1)
     printenergy()
 

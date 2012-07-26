@@ -75,6 +75,6 @@ for i in range(len(train_pos)):
 atoms.extend(methane_trains)
 
 # now write to .traj file
-pt = PickleTrajectory(filename="ch4_trains.traj", mode="w", backup=False)
+pt = PickleTrajectory(filename="ch4_train.traj", mode="w", backup=False)
 pt.write(atoms)
 pt.close()
