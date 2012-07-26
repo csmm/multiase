@@ -3,9 +3,11 @@
 
 import tempfile
 import os
+import io
 
 from ase import Atoms
 from ase.io.trajectory import PickleTrajectory
+import ase.io.pdb
 
 import numpy as np
 
@@ -109,14 +111,13 @@ class CalcRegion(AtomSelector):
         self._cutoff = cutoff
         self._pbc = None
         self._debug = debug
-        self._debug_traj = None
+        self._debug_file = None
         if self._debug > 1:
-            print("Enabling debug")
-            f, fname = tempfile.mkstemp(suffix=".traj",
+            f, fname = tempfile.mkstemp(suffix=".pdb",
                                   prefix="calcregion_debug-",
                                   dir=".")
-            os.close(f)
-            self._debug_traj = PickleTrajectory(fname, "w", backup=False)
+            print("writing debug output to: %s" % fname)
+            self._debug_file = io.open(f, mode="w+b", buffering=0)
 
     def atom_inside(self, pos):
         """
@@ -267,8 +268,8 @@ class CalcRegion(AtomSelector):
             subset.set_pbc(self._pbc)
 
         # dump CalcRegion contents to a trajectory file if debugging
-        if self._debug_traj != None:
-            self._debug_traj.write(subset)
+        if self._debug_file != None:
+            ase.io.pdb.write_pdb(self._debug_file, subset)
 
         return subset, subset_map, wa
 

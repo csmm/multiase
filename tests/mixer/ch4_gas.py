@@ -28,10 +28,10 @@ import cPickle as pickle
 
 
 # PARAMETERS
-a = 20.0
+a = 10.0
+cell = (120.0, 120.0, 120.0)
 calc_style = "combined" # "combined", "classical", "quantum"
 md_style = "Verlet" # "Verlet", "Langevin"
-T = 300 # Kelvin
 timestep = 0.1*units.fs
 # END OF PARAMETERS
 
@@ -40,14 +40,8 @@ print("rank: %i" % rank)
 
 
 
-# a cell full of methane
-
-# unpickle atoms, methane_count, cell variables
-fd = open("ch4_gas.pkl", "r")
-methane_count = pickle.load(fd)
-cell = pickle.load(fd)
-atoms = pickle.load(fd)
-fd.close()
+pt = PickleTrajectory(sys.argv[1], "r")
+atoms = pt[-1] # get the last step
 
 Mixer.set_atom_ids(atoms) # this one is important!
 
@@ -57,11 +51,15 @@ calc_reaxff_full = ReaxFF(ff_file_path=get_datafile("ffield.reax.new"),
 calc_reaxff_qbox = ReaxFF(ff_file_path=get_datafile("ffield.reax.new"),
                           implementation="C")
 
+debug = 0
+if rank == 0:
+    debug = 2
+
 filter_full_sys = CalcBox(pos=(0,0,0), dim=cell, cutoff=2.0, pbc=(1,1,1),
                           debug=0)
 filter_qbox = CalcBox(pos=(0,0,0), dim=(a,a,a),
         cutoff=2.0, inner_dim=(a-4,a-4,a-4),
-        debug=0)
+        debug=debug)
 
 # full system classical is taken as positive
 forces_full_system = ForceCalculation(filter_full_sys)
@@ -122,8 +120,6 @@ dyn = None
 if md_style == "Langevin":
     dyn = Langevin(atoms, timestep, 1.5*T*units.kB, 0.002)
 elif md_style == "Verlet":
-    # set momenta to match temperature T
-    MaxwellBoltzmannDistribution(atoms, 1.5*T*units.kB)
     dyn = VelocityVerlet(atoms, timestep)
 
 def printenergy(a=atoms):    #store a reference to atoms in the definition.
@@ -133,10 +129,10 @@ def printenergy(a=atoms):    #store a reference to atoms in the definition.
         (epot, ekin, ekin/(1.5*units.kB), epot+ekin))
 
 if rank == 0:
-    dyn.attach(printenergy, interval=25)
+    dyn.attach(printenergy, interval=1)
     traj = PickleTrajectory("ch4_gas.traj", 'w', atoms)
-    dyn.attach(traj.write, interval=25)
+    dyn.attach(traj.write, interval=1)
     printenergy()
 
-dyn.run(10000)
+dyn.run(1000)
 

@@ -16,7 +16,8 @@ class Calculation(object):
     ForceCalculation and EnergyCalculation
     """
 
-    def __init__(self, selector=None):
+    def __init__(self, name=None, selector=None):
+        self._name = name
         self._calculator = None
         self._selector = selector
         self.cell = None
@@ -103,9 +104,19 @@ class ForceCalculation(Calculation):
     multi-scale setup.
     """
     
-    def __init__(self, filter):
-        super(ForceCalculation, self).__init__(filter)
+    def __init__(self, name=None, selector=None, debug=0, debug_file=None):
+        super(ForceCalculation, self).__init__(name, selector)
         self.default_weight = 0.0
+        self._debug = debug
+        self._debug_file = debug_file
+        self._debug_counter = 0
+        if self._debug > 1 and self._debug_file == None:
+            f, fname = tempfile.mkstemp(suffix=".log",
+                    prefix="force_calculation_%s-" % self._name,
+                    dir=".")
+            print("writing debug output to: %s" % fname)
+            self._debug_file = io.open(f, mode="w+b", buffering=0)
+
 
     def get_forces(self, atoms):
         subset, subset_map, weights = self.get_subset(atoms)
@@ -116,11 +127,25 @@ class ForceCalculation(Calculation):
 
         if not subset_map:
             return forces
-        forces = self.coeff * weights * forces
+        
+        output_forces = self.coeff * weights * forces
+        
+        if self._debug > 1:
+            self._debug_counter += 1
+            atom_ids = Mixer.get_atom_ids(subset)
+            for i in range(len(forces)):
+                self._debug_file.write(
+                    "%s,%i,%f,%s,%s,%s" % (
+                        self._name,
+                        atom_ids[i],
+                        self._debug_counter,
+                        self.coeff, weights[i], forces[i],
+                        output_forces[i]))
+
         
         # now map them to the original atom sequence
         for i in range(len(subset)):
-            res[subset_map[i]] = forces[i]
+            res[subset_map[i]] = output_forces[i]
         
         return res
 
@@ -131,8 +156,8 @@ class EnergyCalculation(Calculation):
     sub-calculators to produce energies for subsets
     of the atoms.
     """
-    def __init__(self, filter=None):
-        super(EnergyCalculation, self).__init__(filter)
+    def __init__(self, name=None, selector=None):
+        super(EnergyCalculation, self).__init__(name, selector)
 
     def get_energy(self, atoms, force_consistent=False):
         """
@@ -161,7 +186,7 @@ class Mixer(Calculator):
     Please look at tests/mixer/h2_mixer.py for an example of how
     to use this calculator.
     """
-    def __init__(self, forces, energies):
+    def __init__(self, forces, energies, debug=0):
         """
         @type forces:           [ForceCalculation]
         @param forces:          list of Mixer.ForceCalculation to 
@@ -182,6 +207,7 @@ class Mixer(Calculator):
 
         self._forces = forces
         self._energies = energies
+        self._debug = debug
 
     def calculation_required(self, atoms, quantities):
         for c in self._forces + self._energies:
