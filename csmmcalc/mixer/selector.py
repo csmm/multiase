@@ -100,7 +100,7 @@ class CalcRegion(AtomSelector):
     to carve up the system space for different calculators while
     allowing atoms to move around freely.
     """
-    def __init__(self, pos=(0,0,0), cutoff=2.0, pbc=None, debug=0):
+    def __init__(self, name=None, pos=(0,0,0), cutoff=2.0, pbc=None, debug=0):
         """
         @type pos:      tuple(float, float, float)
         @param pos:     Coordinates for the center of the region
@@ -112,12 +112,11 @@ class CalcRegion(AtomSelector):
         self._pbc = None
         self._debug = debug
         self._debug_file = None
+        self._name = name
         if self._debug > 1:
-            f, fname = tempfile.mkstemp(suffix=".pdb",
-                                  prefix="calcregion_debug-",
-                                  dir=".")
+            fname = "calcregion_debug_%s.pdb" % self._name
+            self._debug_file = open(fname, "w+b", buffering=0)
             print("writing debug output to: %s" % fname)
-            self._debug_file = io.open(f, mode="w+b", buffering=0)
 
     def atom_inside(self, pos):
         """
@@ -249,7 +248,7 @@ class CalcRegion(AtomSelector):
         # construct cleaned up subset of atoms within the CalcRegion
         for atom_id in root.get_objects():
             if black_list[atom_id]: # exclude blacklisted atom
-                if self._debug > 0:
+                if self._debug > 2:
                     print("excluding atom: %i" % atom_id)
                 continue
             subset.extend(atoms[rev_map[atom_id]:rev_map[atom_id]+1])
@@ -285,7 +284,7 @@ class CalcBox(CalcRegion):
     constructor. It's simply passed on to the generated Atoms object, so it
     should adhere to the ASE documentation.
     """
-    def __init__(self, pos=(0,0,0), dim=(1,1,1),
+    def __init__(self, name=None, pos=(0,0,0), dim=(1,1,1),
                  inner_dim=None, cutoff=2.0, pbc=None, debug=0):
         """
         @type pos:          tuple(float, float, float)
@@ -298,7 +297,8 @@ class CalcBox(CalcRegion):
         @param pbc:         periodic boundary condition flags
         """
 
-        super(CalcBox, self).__init__(pos, cutoff=cutoff, pbc=pbc, debug=debug)
+        super(CalcBox, self).__init__(name, pos,
+                            cutoff=cutoff, pbc=pbc, debug=debug)
 
         self._dim = dim
 

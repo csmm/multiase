@@ -188,7 +188,7 @@ class Mixer(Calculator):
     Please look at tests/mixer/h2_mixer.py for an example of how
     to use this calculator.
     """
-    def __init__(self, forces, energies, debug=0, debug_file=None):
+    def __init__(self, name=None, forces=None, energies=None, debug=0):
         """
         @type forces:           [ForceCalculation]
         @param forces:          list of Mixer.ForceCalculation to 
@@ -210,17 +210,17 @@ class Mixer(Calculator):
         self._forces = forces
         self._energies = energies
         self._debug = debug
-        self._debug_file = debug_file
+        self._debug_forces_file = None
+        self._debug_energies_file = None
         self._debug_counter = 0
+        self._name = name
 
-        if self._debug > 1 and self._debug_file == None:
-            f, fname = tempfile.mkstemp(suffix=".log",
-                    prefix="mixer-forces-",
-                    dir=".")
-            print("writing debug output to: %s" % fname)
-            self._debug_file = io.open(f, mode="w+b", buffering=0)
-
-
+        if self._debug > 1:
+            forces_fname = "mixer_forces_%s.log" % self._name
+            energies_fname = "mixer_energies_%s.log" % self._name
+            self._debug_forces_file = open(forces_fname, "w+b", buffering=0)
+            self._debug_energies_file = open(energies_fname, "w+b",
+                    buffering=0)
 
     def calculation_required(self, atoms, quantities):
         for c in self._forces + self._energies:
@@ -240,19 +240,26 @@ class Mixer(Calculator):
         """
         forces = np.zeros((len(atoms), 3))
         debug_forces = None
-        if self._debug > 1:
-            debug_forces = np.array(Mixer.get_atom_ids(atoms),
-                    dtype=float).reshape((len(atoms), 1))
         
         for i in range(len(self._forces)):
             sub_forces = self._forces[i].get_forces(atoms)
             if self._debug > 1:
-                debug_forces = np.append(debug_forces, sub_forces, axis=1)
+                if debug_forces == None:
+                    debug_forces = np.copy(sub_forces)
+                else:
+                    debug_forces = np.append(debug_forces, sub_forces, axis=1)
             forces += sub_forces
 
         if self._debug > 1:
             debug_forces = np.append(debug_forces, forces, axis=1)
-            np.savetxt(self._debug_file, debug_forces, delimiter=",", fmt="%5.5e")
+            atom_ids = Mixer.get_atom_ids(atoms)
+            fmt = [",%.5e" for x in range((len(self._forces) + 1) * 3)]
+            fmt_str = "%i" + "".join(fmt) + "\n"
+            for i in range(len(atoms)):
+                tmp = [atom_ids[i]]
+                tmp += list(debug_forces[i])
+                line = fmt_str % tuple(tmp)
+                self._debug_forces_file.write(line)
         return forces
 
     def get_potential_energy(self, atoms=None, force_consistent=False):
@@ -264,8 +271,19 @@ class Mixer(Calculator):
         @return:            the energy of the system
         """
         energy = 0.0
+        energy_parts = []
         for ec in self._energies:
-            energy += ec.get_energy(atoms, force_consistent)
+            sub_energy = ec.get_energy(atoms, force_consistent)
+            if self._debug > 1:
+                energy_parts.append(sub_energy)
+            energy += sub_energy
+
+        if self._debug > 1:
+            fmt = [",%.5e" for x in range(len(self._energies))]
+            fmt_str = "%.5e" + "".join(fmt) + "\n"
+            tmp = [energy]
+            tmp += energy_parts
+            self._debug_energies_file.write(fmt_str % tuple(tmp))
         return energy
     
     def set_atoms(self, atoms):

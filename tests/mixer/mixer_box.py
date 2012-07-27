@@ -31,19 +31,43 @@ import getopt, sys
 
 def usage():
     print("""
-python mixer_box.py [-h -c -q -d N -i input.traj -o output.traj]
-    -h              help
-    -c              plain classical simulation
-    -q              plain quantum simulation
-    -d N            debug level
-    -i input.traj   input trajectory file
-    -o output.traj  output trajectory file
+python mixer_box.py [options]
+options:
+    -h, --help                      help
+    -c, --classical                 plain classical simulation
+    -q, --quantum                   plain quantum simulation
+    -d, --debug=N                   debug level
+    -i, --input=input.traj          input trajectory file
+    -o, --output=output.traj        output trajectory file
+    -B, --box=NxNxN                 full system cell
+    -Q, --quantum-box=NxNxN         quantum cell
+    -T, --transition-buffer=n.n     transition buffer in angstroms
+    -C, --cutoff=n.n                molecule bond detection cutoff in
+                                    angstroms
+    -S, --steps=N                   number of simulation steps to run
+    -t, --time-step=n.n             time step in femtoseconds
+    -M, --molecular-dynamics=name   choose from "Langevin", "Verlet"
+    -P, --position=n.n,n.n,n.n      quantum box center position, the
+                                    full system box is always centered
+                                    at (0.0, 0.0, 0.0)
     """)
 
 try:
     opts, args = getopt.getopt(sys.argv[1:],
-            "hcqo:d:i:",["help", "classical", "quantum",
-                       "output=", "debug", "input="])
+            "B:Q:T:C:S:t:hcqo:d:i:M:",[
+                "box=",
+                "quantum-box=",
+                "transition-buffer=",
+                "cutoff=",
+                "steps=",
+                "time-step=",
+                "help",
+                "classical",
+                "quantum",
+                "output=",
+                "debug=",
+                "input=",
+                "molecular-dynamics="])
 except getopt.GetoptError, err:
     print(str(err))
     usage()
@@ -51,29 +75,47 @@ except getopt.GetoptError, err:
 
 # PARAMETERS
 s = 10.0
-cell = (120.0, 120.0, 120.0)
+cell = (100.0, 100.0, 100.0)
+q_cell = (10.0, 10.0, 10.0)
+transition_buffer = 2.0
+cutoff = 2.0
 calc_style = "combined" # "combined", "classical", "quantum"
 md_style = "Verlet" # "Verlet", "Langevin"
 timestep = 0.1*units.fs
 output_file = "mixer_box.traj"
 input_file = None
-debug = 0
+set_debug = 0
+steps = 10
 # END OF PARAMETERS
 
 for o, a in opts:
-    if o == "-d":
-        debug = int(a)
-    if o == "-h":
+    if o in ["-d", "--debug"]:
+        set_debug = int(a)
+    if o in ["-h", "--help"]:
         usage()
         sys.exit(0)
-    if o == "-c":
+    if o in ["-c", "--classical"]:
         calc_style = "classical"
-    if o == "-q":
+    if o in ["-q", "--quantum"]:
         calc_style = "quantum"
-    if o == "-o":
+    if o in ["-o", "--output"]:
         output_file = a
-    if o == "-i":
+    if o in ["-i", "--input"]:
         input_file = a
+    if o in ["-M", "--molecular-dynamics"]:
+        md_style = a
+    if o in ["-t", "--time-step"]:
+        timestep = float(a) * units.fs
+    if o in ["-B", "--box"]:
+        cell = tuple([float(f) for f in a.split("x")])
+    if o in ["-Q", "--quantum-box"]:
+        q_cell = tuple([float(f) for f in a.split("x")])
+    if o in ["-T", "--transition-buffer"]:
+        transition_buffer = float(a)
+    if o in ["-C", "--cutoff"]:
+        cutoff = float(a)
+    if o in ["-S", "--steps"]:
+        steps = int(a)
 
 
 # verify that MPI is actually working
@@ -86,7 +128,7 @@ atoms = pt[-1] # get the last step
 
 Mixer.set_atom_ids(atoms) # this one is important!
 
-calc_gpaw = GPAW(nbands=-2, txt="h2_1_%i.txt" % rank)
+calc_gpaw = GPAW(nbands=-2, txt="mixer_box_gpaw.txt")
 calc_reaxff_full = ReaxFF(ff_file_path=get_datafile("ffield.reax.new"),
                           implementation="C")
 calc_reaxff_qbox = ReaxFF(ff_file_path=get_datafile("ffield.reax.new"),
@@ -94,12 +136,16 @@ calc_reaxff_qbox = ReaxFF(ff_file_path=get_datafile("ffield.reax.new"),
 
 debug = 0
 if rank == 0:
-    debug = 2
+    debug = set_debug
 
-filter_full_sys = CalcBox(pos=(0,0,0), dim=cell, cutoff=2.0, pbc=(1,1,1),
-                          debug=2)
-filter_qbox = CalcBox(pos=(0,0,0), dim=(s,s,s),
-        cutoff=2.0, inner_dim=(s-4,s-4,s-4),
+filter_full_sys = CalcBox(name="full_sys",
+                pos=(0,0,0), dim=cell,
+                cutoff=cutoff, pbc=(1,1,1),
+                debug=debug)
+filter_qbox = CalcBox(name="qbox",pos=(0,0,0), dim=q_cell,
+        cutoff=cutoff, inner_dim=(q_cell[0] - transition_buffer*2.0,
+            q_cell[1] - transition_buffer*2.0,
+            q_cell[2] - transition_buffer*2.0),
         debug=debug)
 
 # full system classical is taken as positive
@@ -116,7 +162,9 @@ forces_qbox_reaxff.coeff = -1.0
 # quantum box quantum is added using qbox weights
 forces_qbox_gpaw = ForceCalculation("force_qbox_gpaw", filter_qbox)
 forces_qbox_gpaw.calculator = calc_gpaw
-forces_qbox_gpaw.cell = (s+2,s+2,s+2)
+forces_qbox_gpaw.cell = (q_cell[0] + 3,
+                         q_cell[1] + 3,
+                         q_cell[2] + 3)
 
 # energies are based on H = H_c + H_q' - H_c'
 energy_full_system = EnergyCalculation("energy_full", filter_full_sys)
@@ -131,7 +179,9 @@ energy_qbox_reaxff.coeff = -1.0
 
 energy_qbox_gpaw = EnergyCalculation("energy_qbox_gpaw", filter_qbox)
 energy_qbox_gpaw.calculator = calc_gpaw
-energy_qbox_gpaw.cell = (s+2,s+2,s+2)
+energy_qbox_gpaw.cell = (q_cell[0] + 3,
+                         q_cell[1] + 3,
+                         q_cell[2] + 3)
 energy_qbox_gpaw.coeff = 1.0
 
 mixer_forces = []
@@ -152,9 +202,10 @@ elif calc_style == "quantum":
     mixer_forces = [forces_qbox_gpaw]
     mixer_energies = [energy_qbox_gpaw]
 
-mixer = Mixer(forces=mixer_forces,
+mixer = Mixer(name="mixer_box",
+              forces=mixer_forces,
               energies=mixer_energies,
-              debug=2)
+              debug=debug)
 atoms.set_calculator(mixer)
 
 dyn = None
@@ -176,5 +227,5 @@ if rank == 0:
     dyn.attach(traj.write, interval=1)
     printenergy()
 
-dyn.run(1000)
+dyn.run(steps)
 
