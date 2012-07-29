@@ -41,20 +41,30 @@ options:
     -o, --output=output.traj        output trajectory file
     -B, --box=NxNxN                 full system cell
     -Q, --quantum-box=NxNxN         quantum cell
-    -T, --transition-buffer=n.n     transition buffer in angstroms
-    -C, --cutoff=n.n                molecule bond detection cutoff in
+    -T, --transition-buffer=N       transition buffer in angstroms
+    -C, --cutoff=N                  molecule bond detection cutoff in
                                     angstroms
     -S, --steps=N                   number of simulation steps to run
-    -t, --time-step=n.n             time step in femtoseconds
+    -t, --time-step=N               time step in femtoseconds
     -M, --molecular-dynamics=name   choose from "Langevin", "Verlet"
-    -P, --position=n.n,n.n,n.n      quantum box center position, the
+    -P, --position=N,N,N            quantum box center position, the
                                     full system box is always centered
                                     at (0.0, 0.0, 0.0)
+    -L, --log-interval=N            write system state to output and
+                                    energy log every Nth step
+    -H, --langevin-temp=N           temperature target in Kelvins for Langevin
+                                    molecular dynamics
+    -b, --bands=N                   number of electron bands for GPAW
+                                    calculation
+    N is float (1.234) for all except --debug, --steps, --log-interval
+    and --bands where it is an integer.
     """)
 
 try:
     opts, args = getopt.getopt(sys.argv[1:],
-            "B:Q:T:C:S:t:hcqo:d:i:M:",[
+            "H:L:B:Q:T:C:S:t:hcqo:d:i:M:b:",[
+                "langevin-temp=",
+                "log-interval=",
                 "box=",
                 "quantum-box=",
                 "transition-buffer=",
@@ -67,7 +77,8 @@ try:
                 "output=",
                 "debug=",
                 "input=",
-                "molecular-dynamics="])
+                "molecular-dynamics=",
+                "bands"])
 except getopt.GetoptError, err:
     print(str(err))
     usage()
@@ -77,6 +88,7 @@ except getopt.GetoptError, err:
 s = 10.0
 cell = (100.0, 100.0, 100.0)
 q_cell = (10.0, 10.0, 10.0)
+qbox_pos = (0.0, 0.0, 0.0)
 transition_buffer = 2.0
 cutoff = 2.0
 calc_style = "combined" # "combined", "classical", "quantum"
@@ -86,6 +98,9 @@ output_file = "mixer_box.traj"
 input_file = None
 set_debug = 0
 steps = 10
+log_interval = 25
+langevin_temp = 300 # Kelvins
+bands = -2
 # END OF PARAMETERS
 
 for o, a in opts:
@@ -116,6 +131,14 @@ for o, a in opts:
         cutoff = float(a)
     if o in ["-S", "--steps"]:
         steps = int(a)
+    if o in ["-P", "--position"]:
+        qbox_pos = tuple([float(f) for f in a.split(",")])
+    if o in ["-L", "--log-interval"]:
+        log_interval = int(a)
+    if o in ["-H", "--langevin-temp"]:
+        langevin_temp = float(a)
+    if o in ["-b", "--bands"]:
+        bands = int(a)
 
 
 # verify that MPI is actually working
@@ -128,12 +151,13 @@ atoms = pt[-1] # get the last step
 
 Mixer.set_atom_ids(atoms) # this one is important!
 
-calc_gpaw = GPAW(nbands=-2, txt="mixer_box_gpaw.txt")
+calc_gpaw = GPAW(nbands=bands, txt="mixer_box_gpaw.log")
 calc_reaxff_full = ReaxFF(ff_file_path=get_datafile("ffield.reax.new"),
                           implementation="C")
 calc_reaxff_qbox = ReaxFF(ff_file_path=get_datafile("ffield.reax.new"),
                           implementation="C")
 
+# debug disabled for non-master nodes, this is so on purpose!
 debug = 0
 if rank == 0:
     debug = set_debug
@@ -142,8 +166,9 @@ filter_full_sys = CalcBox(name="full_sys",
                 pos=(0,0,0), dim=cell,
                 cutoff=cutoff, pbc=(1,1,1),
                 debug=debug)
-filter_qbox = CalcBox(name="qbox",pos=(0,0,0), dim=q_cell,
-        cutoff=cutoff, inner_dim=(q_cell[0] - transition_buffer*2.0,
+filter_qbox = CalcBox(name="qbox",pos=qbox_pos, dim=q_cell,
+        cutoff=cutoff,
+        inner_dim=(q_cell[0] - transition_buffer*2.0,
             q_cell[1] - transition_buffer*2.0,
             q_cell[2] - transition_buffer*2.0),
         debug=debug)
@@ -215,16 +240,20 @@ if md_style == "Langevin":
 elif md_style == "Verlet":
     dyn = VelocityVerlet(atoms, timestep)
 
-def printenergy(a=atoms):    #store a reference to atoms in the definition.
+energy_file = None
+
+def printenergy(a=atoms):
     epot = a.get_potential_energy() / len(a)
     ekin = a.get_kinetic_energy() / len(a)
-    print("Energy per atom: Epot = %.3feV  Ekin = %.3feV (T=%3.0fK)  Etot = %.3feV" %
-        (epot, ekin, ekin/(1.5*units.kB), epot+ekin))
+    energy_file.write("%.5e,%.5e,%.5e,%.5e" %
+        (epot + ekin, epot, ekin, ekin/(1.5*units.kB) + "\n"))
 
+# only enable logging for master node where rank == 0
 if rank == 0:
-    dyn.attach(printenergy, interval=1)
+    energy_file = open("mixer_box_energy.csv", "w+b", buffering=0)
+    dyn.attach(printenergy, interval=log_interval)
     traj = PickleTrajectory(output_file, 'w', atoms)
-    dyn.attach(traj.write, interval=1)
+    dyn.attach(traj.write, interval=log_interval)
     printenergy()
 
 dyn.run(steps)
