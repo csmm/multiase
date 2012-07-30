@@ -20,7 +20,7 @@ from csmmcalc.mixer.mixer import Mixer
 from csmmcalc.mixer.mixer import EnergyCalculation, ForceCalculation
 
 from csmmcalc.lammps.reaxff import ReaxFF
-from csmmcalc.utils import get_datafile
+from csmmcalc.utils import get_datafile, DynTesting
 from csmmcalc.mixer.selector import CalcBox
 
 import numpy as np
@@ -46,7 +46,8 @@ options:
                                     angstroms
     -S, --steps=N                   number of simulation steps to run
     -t, --time-step=N               time step in femtoseconds
-    -M, --molecular-dynamics=name   choose from "Langevin", "Verlet"
+    -M, --molecular-dynamics=name   choose from "Langevin", "Verlet",
+                                    "TESTING"
     -P, --position=N,N,N            quantum box center position, the
                                     full system box is always centered
                                     at (0.0, 0.0, 0.0)
@@ -103,6 +104,7 @@ langevin_temp = 300 # Kelvins
 bands = -2
 # END OF PARAMETERS
 
+# process command line options
 for o, a in opts:
     if o in ["-d", "--debug"]:
         set_debug = int(a)
@@ -174,18 +176,21 @@ filter_qbox = CalcBox(name="qbox",pos=qbox_pos, dim=q_cell,
         debug=debug)
 
 # full system classical is taken as positive
-forces_full_system = ForceCalculation("force_full", filter_full_sys)
+forces_full_system = ForceCalculation("force_full", filter_full_sys,
+                                      debug=debug)
 forces_full_system.calculator = calc_reaxff_full
 forces_full_system.cell = cell
 
 # quantum box classical is subtracted using the qbox weights
-forces_qbox_reaxff = ForceCalculation("force_qbox_reax", filter_qbox)
+forces_qbox_reaxff = ForceCalculation("force_qbox_reax", filter_qbox,
+                                      debug=debug)
 forces_qbox_reaxff.calculator = calc_reaxff_qbox
 forces_qbox_reaxff.cell = cell
 forces_qbox_reaxff.coeff = -1.0
 
 # quantum box quantum is added using qbox weights
-forces_qbox_gpaw = ForceCalculation("force_qbox_gpaw", filter_qbox)
+forces_qbox_gpaw = ForceCalculation("force_qbox_gpaw", filter_qbox,
+                                    debug=debug)
 forces_qbox_gpaw.calculator = calc_gpaw
 forces_qbox_gpaw.cell = (q_cell[0] + 3,
                          q_cell[1] + 3,
@@ -204,9 +209,9 @@ energy_qbox_reaxff.coeff = -1.0
 
 energy_qbox_gpaw = EnergyCalculation("energy_qbox_gpaw", filter_qbox)
 energy_qbox_gpaw.calculator = calc_gpaw
-energy_qbox_gpaw.cell = (q_cell[0] + 3,
-                         q_cell[1] + 3,
-                         q_cell[2] + 3)
+energy_qbox_gpaw.cell = (q_cell[0] + 3.0,
+                         q_cell[1] + 3.0,
+                         q_cell[2] + 3.0)
 energy_qbox_gpaw.coeff = 1.0
 
 mixer_forces = []
@@ -239,6 +244,8 @@ if md_style == "Langevin":
     dyn = Langevin(atoms, timestep, 1.5*T*units.kB, 0.002)
 elif md_style == "Verlet":
     dyn = VelocityVerlet(atoms, timestep)
+elif md_style == "TESTING":
+    dyn = DynTesting(atoms, timestep=0.1*units.fs, offset=(0.1, 0., 0.))
 
 energy_file = None
 
@@ -246,7 +253,7 @@ def printenergy(a=atoms):
     epot = a.get_potential_energy() / len(a)
     ekin = a.get_kinetic_energy() / len(a)
     energy_file.write("%.5e,%.5e,%.5e,%.5e" %
-        (epot + ekin, epot, ekin, ekin/(1.5*units.kB) + "\n"))
+        (epot + ekin, epot, ekin, ekin/(1.5*units.kB)) + "\n")
 
 # only enable logging for master node where rank == 0
 if rank == 0:

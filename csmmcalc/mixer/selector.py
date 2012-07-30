@@ -325,54 +325,59 @@ class CalcBox(CalcRegion):
 
     def get_weight(self, pos):
         x, y, z = pos
+
+        # if outside the box, return 0.0
         if (x > self._xmax or x < self._xmin
                 or y > self._ymax or y < self._ymin
                 or z > self._zmax or z < self._zmin):
             return 0.0
 
+        # if no inner box, straight to 1.0
         if not self._inner_dim:
             return 1.0
         
+        # calculate transition region weight
         r = []
 
-        if x > self._xmin and x < self._inner_xmin:
-            d = self._inner_xmin - x
-            w = self._scale(d, self._xmin, self._inner_xmin)
-            r.append((d, w))
-        if x < self._xmax and x > self._inner_xmax:
-            d = x - self._inner_xmax
-            w = self._scale(d, self._inner_xmax, self._xmax)
-            r.append((d, w))
-        if y > self._ymin and y < self._inner_ymin:
-            d = self._inner_ymin - y
-            w = self._scale(d, self._ymin, self._inner_ymin)
-            r.append((d, w))
-        if y < self._ymax and y > self._inner_ymax:
-            d = y - self._inner_ymax
-            w = self._scale(d, self._inner_ymax, self._ymax)
-            r.append((d, w))
-        if z > self._zmin and z < self._inner_zmin:
-            d = self._inner_zmin - z
-            w = self._scale(d, self._zmin, self._inner_zmin)
-            r.append((d, w))
-        if z < self._zmax and z > self._inner_zmax:
-            d = z - self._inner_zmax
-            w = self._scale(d, self._inner_zmax, self._zmax)
-            r.append((d, w))
+        if x >= self._xmin and x < self._inner_xmin:
+            w = self._scale(x, self._xmin, self._inner_xmin)
+            r.append(w)
+        if x <= self._xmax and x > self._inner_xmax:
+            w = self._scale(x, self._inner_xmax, self._xmax, reverse=1)
+            r.append(w)
+        if y >= self._ymin and y < self._inner_ymin:
+            w = self._scale(y, self._ymin, self._inner_ymin)
+            r.append(w)
+        if y <= self._ymax and y > self._inner_ymax:
+            w = self._scale(y, self._inner_ymax, self._ymax, reverse=1)
+            r.append(w)
+        if z >= self._zmin and z < self._inner_zmin:
+            w = self._scale(z, self._zmin, self._inner_zmin)
+            r.append(w)
+        if z <= self._zmax and z > self._inner_zmax:
+            w = self._scale(z, self._inner_zmax, self._zmax, reverse=1)
+            r.append(w)
 
         if len(r) == 0:
             return 1.0
 
-        weight = 0.0
+        weight = 1.0
 
-        for d, w in r:
-            weight = max(weight, w)
+        for w in r:
+            weight = min(weight, w)
 
         return weight
 
     @staticmethod
-    def _scale(value, left, right):
-        return (value - left)/(right - left)
+    def _scale(value, left, right, reverse=0):
+        if value < left:
+            return 0.0
+        if value > right:
+            return 1.0
+        if reverse == 0:
+            return (value - left)/(right - left)
+        else:
+            return (right - value)/(right - left)
 
 
     def atom_inside(self, pos):

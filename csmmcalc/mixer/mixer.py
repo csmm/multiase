@@ -112,12 +112,9 @@ class ForceCalculation(Calculation):
         self._debug = debug
         self._debug_file = debug_file
         self._debug_counter = 0
-        if self._debug > 1 and self._debug_file == None:
-            f, fname = tempfile.mkstemp(suffix=".log",
-                    prefix="force_calculation_%s-" % self._name,
-                    dir=".")
-            print("writing debug output to: %s" % fname)
-            self._debug_file = io.open(f, mode="w+b", buffering=0)
+        if self._debug > 1:
+            fname = "force_calculation_%s.log" % self._name
+            self._debug_file = open(fname, "w+b", buffering=0)
 
 
     def get_forces(self, atoms):
@@ -136,12 +133,12 @@ class ForceCalculation(Calculation):
             atom_ids = Mixer.get_atom_ids(subset)
             for i in range(len(forces)):
                 self._debug_file.write(
-                    "%s,%i,%f,%s,%s,%s" % (
+                    "%s,%i,%i,%f,%s,%s,%s" % (
                         self._name,
                         atom_ids[i],
                         self._debug_counter,
                         self.coeff, weights[i], forces[i],
-                        output_forces[i]))
+                        output_forces[i]) + "\n")
             self._debug_counter += 1
 
         
