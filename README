@@ -40,12 +40,19 @@ Download LAMMPS source code from http://lammps.sandia.gov/download.html
 Now copy the resulting lmp_serial binary to a directory in your path. A nice
 location might be $HOME/bin.
 
+The ASE LAMMPS interface requires the following to be set::
+  export LAMMPS_COMMAND=$HOME/bin/lmp_serial
+
+Please adjust according to where you put the lammps binary.
+
 
 ASE Installation
 ****************
 
 Installation instructions at https://wiki.fysik.dtu.dk/ase/download.html
 are accurate.
+
+To help 
 
 
 GPAW Installation
