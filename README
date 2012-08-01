@@ -26,6 +26,9 @@ Installation and Usage
 
 To use these scripts you need to install LAMMPS, ASE and GPAW. LAMMPS needs
 to be built as a serial binary in order to work with a parallel GPAW.
+In the following instructions you're expected to put any line with::
+  export VARIABLE="SOMETHING"
+into your $HOME/.bashrc or equivalent.
 
 
 LAMMPS Installation
