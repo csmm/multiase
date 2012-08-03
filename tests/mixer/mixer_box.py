@@ -26,7 +26,7 @@ from csmmcalc.mixer.selector import CalcBox
 import numpy as np
 import cPickle as pickle
 
-import getopt, sys
+import getopt
 
 
 def usage():
