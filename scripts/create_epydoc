@@ -4,4 +4,19 @@ if [ ! -d ./csmmcalc ]; then
 	echo "Please run $0 from top level of the source tree"
 	exit 1
 fi
-epydoc -o ./epydocs ./csmmcalc
+if [ -z "$EPYDOC" ]; then
+	candidates="epydoc epydoc-2.7 epydoc-2.6 epydoc-3.2"
+	for c in $candidates; do
+		EPYDOC=$(which $c);
+		if [ ! -z "$EPYDOC" ]; then
+			break;
+		fi
+	done
+fi
+
+# check that we found an epydoc
+if [ -z "$EPYDOC" ]; then
+	echo "Unable to find an epydoc binary!";
+	exit 2;
+fi
+$EPYDOC --graph=umlclasstree -o ./epydocs ./csmmcalc
