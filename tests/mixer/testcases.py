@@ -147,6 +147,42 @@ class SelectorTests(unittest.TestCase):
                 print("CH4 pos: %s" % pos[i])
                 print("CH4 in selection: %s" % inside_ids)
 
+    def test_weights(self):
+        cb = CalcBox(pos=(0., 0., 0.),
+                     cutoff=2.0,
+                     dim=(100.0, 100.0, 100.0),
+                     inner_dim=(50.0, 50.0, 50.0))
+        # test all three axis
+        test_positions = np.column_stack((np.linspace(-55.0, 55.0, 100),
+                                          np.zeros(100),
+                                          np.zeros(100)))
+        test_positions = np.append(test_positions, np.column_stack(
+                                (np.zeros(100),
+                                 np.linspace(-55.0, 55.0, 100),
+                                 np.zeros(100))), axis=0)
+        test_positions = np.append(test_positions, np.column_stack(
+                                (np.zeros(100),
+                                 np.zeros(100),
+                                 np.linspace(-55.0, 55.0, 100))),
+                                 axis=0)
+        # and all 8 corners too
+        a = 37.5
+        test_positions = np.append(test_positions, np.array((
+                                (-a, -a, -a),
+                                (-a, -a, a),
+                                (-a, a, -a),
+                                (-a, a, -a),
+                                (a, -a, -a),
+                                (a, -a, a),
+                                (a, a, -a),
+                                (a, a, a))),
+                                axis=0)
+        correct_weights = np.loadtxt("weight_test.csv", delimiter=",")
+        for i in range(len(test_positions)):
+            w = cb.get_weight(test_positions[i])
+            self.assertEqual(correct_weights[i], w)
+
+
 if __name__ == "__main__":
     unittest.main()
 
