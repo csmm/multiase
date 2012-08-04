@@ -18,6 +18,7 @@ Description of directory structure
   gpaw/			- gpaw scripts
   plot/			- plotting scripts
   kinetic/		- kinetic energy functionals scripts
+  docs/			- documentation
   README		- this file
   
 
@@ -54,8 +55,6 @@ ASE Installation
 
 Installation instructions at https://wiki.fysik.dtu.dk/ase/download.html
 are accurate.
-
-To help 
 
 
 GPAW Installation
