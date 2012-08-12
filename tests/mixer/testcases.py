@@ -106,14 +106,14 @@ class SelectorTests(unittest.TestCase):
 
 
     def test_calcbox_all(self):
-        cb = CalcBox(pos=(0., 0., 0.),
+        cb = CalcBox(name="testbox", pos=(0., 0., 0.),
                      dim=(self._edge + 5, self._edge + 5, self._edge + 5))
         sa, srmap, sw = cb.select_atoms(self._atoms)
         ra = self._atoms
         self.assertEqual(ra, sa)
 
     def test_calcbox_subset(self):
-        cb = CalcBox(pos=(0., 0., 0.),
+        cb = CalcBox(name="testbox", pos=(0., 0., 0.),
                      cutoff=0.0,
                      dim=(50.0, 50.0, 50.0))
         sa, srmap, sw = cb.select_atoms(self._atoms)
@@ -125,17 +125,16 @@ class SelectorTests(unittest.TestCase):
         self.assertEqual(set(Mixer.get_atom_ids(sa)), correct_ids)
 
     def test_calcbox_moving_ch4(self):
-        cb = CalcBox(pos=(0., 0., 0.),
+        cb = CalcBox(name="testbox", pos=(0., 0., 0.),
                      cutoff=2.0,
                      dim=(55.0, 55.0, 55.0),
-                     debug=2)
+                     debug=0)
         ch4 = [0, 1, 2, 3] # these are atoms indexes and ids
         z = np.linspace(-self._edge/2.0 - 25, self._edge/2.0 + 25, 100)
         x = np.zeros_like(z)
         y = np.zeros_like(z)
         pos = np.column_stack((x, y, z))
         for i in range(len(pos)):
-            print(pos[i])
             self._set_molecule_pos(self._atoms,
                                    ch4,
                                    pos[i])
@@ -148,7 +147,7 @@ class SelectorTests(unittest.TestCase):
                 print("CH4 in selection: %s" % inside_ids)
 
     def test_weights(self):
-        cb = CalcBox(pos=(0., 0., 0.),
+        cb = CalcBox(name="testbox", pos=(0., 0., 0.),
                      cutoff=2.0,
                      dim=(100.0, 100.0, 100.0),
                      inner_dim=(50.0, 50.0, 50.0))

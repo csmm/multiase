@@ -176,43 +176,41 @@ filter_qbox = CalcBox(name="qbox",pos=qbox_pos, dim=q_cell,
         debug=debug)
 
 # full system classical is taken as positive
-forces_full_system = ForceCalculation("force_full", filter_full_sys,
+forces_full_system = ForceCalculation("force_full", selector=filter_full_sys,
+                                      calculator=calc_reaxff_full,
+                                      cell=cell,
                                       debug=debug)
-forces_full_system.calculator = calc_reaxff_full
-forces_full_system.cell = cell
 
 # quantum box classical is subtracted using the qbox weights
-forces_qbox_reaxff = ForceCalculation("force_qbox_reax", filter_qbox,
+forces_qbox_reaxff = ForceCalculation("force_qbox_reax", selector=filter_qbox,
+                                      calculator=calc_reaxff_qbox,
+                                      coeff=-1.0,
+                                      cell=cell,
                                       debug=debug)
-forces_qbox_reaxff.calculator = calc_reaxff_qbox
-forces_qbox_reaxff.cell = cell
-forces_qbox_reaxff.coeff = -1.0
 
 # quantum box quantum is added using qbox weights
-forces_qbox_gpaw = ForceCalculation("force_qbox_gpaw", filter_qbox,
+forces_qbox_gpaw = ForceCalculation("force_qbox_gpaw", selector=filter_qbox,
+                                    calculator=calc_gpaw,
+                                    cell=(q_cell[0] + 3,
+                                    q_cell[1] + 3,
+                                    q_cell[2] + 3),
                                     debug=debug)
-forces_qbox_gpaw.calculator = calc_gpaw
-forces_qbox_gpaw.cell = (q_cell[0] + 3,
-                         q_cell[1] + 3,
-                         q_cell[2] + 3)
 
 # energies are based on H = H_c + H_q' - H_c'
-energy_full_system = EnergyCalculation("energy_full", filter_full_sys)
-energy_full_system.calculator = calc_reaxff_full
-energy_full_system.cell = cell
-energy_full_system.coeff = 1.0
+energy_full_system = EnergyCalculation("energy_full", selector=filter_full_sys,
+                                       calculator=calc_reaxff_full,
+                                       cell=cell)
 
-energy_qbox_reaxff = EnergyCalculation("energy_qbox_reax", filter_qbox)
-energy_qbox_reaxff.calculator = calc_reaxff_qbox
-energy_qbox_reaxff.cell = cell
-energy_qbox_reaxff.coeff = -1.0
+energy_qbox_reaxff = EnergyCalculation("energy_qbox_reax", selector=filter_qbox,
+                                       calculator=calc_reaxff_qbox,
+                                       cell=cell,
+                                       coeff=-1.0)
 
-energy_qbox_gpaw = EnergyCalculation("energy_qbox_gpaw", filter_qbox)
-energy_qbox_gpaw.calculator = calc_gpaw
-energy_qbox_gpaw.cell = (q_cell[0] + 3.0,
-                         q_cell[1] + 3.0,
-                         q_cell[2] + 3.0)
-energy_qbox_gpaw.coeff = 1.0
+energy_qbox_gpaw = EnergyCalculation("energy_qbox_gpaw", selector=filter_qbox,
+                                     calculator=calc_gpaw,
+                                     cell=(q_cell[0] + 3,
+                                     q_cell[1] + 3,
+                                     q_cell[2] + 3))
 
 mixer_forces = []
 mixer_energies = []
@@ -258,6 +256,7 @@ def printenergy(a=atoms):
 # only enable logging for master node where rank == 0
 if rank == 0:
     energy_file = open("mixer_box_energy.csv", "w+b", buffering=0)
+    energy_file.write("total,potential,kinetic,temperature\n")
     dyn.attach(printenergy, interval=log_interval)
     traj = PickleTrajectory(output_file, 'w', atoms)
     dyn.attach(traj.write, interval=log_interval)

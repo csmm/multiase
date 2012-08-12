@@ -20,10 +20,11 @@ atoms = Atoms("H2",
 Mixer.set_atom_ids(atoms) # sequence of numbers in same order as positions
                           # were given above, index starts from 0
 
-calc_1 = GPAW(nbands=2, txt="h2_1.txt")
-calc_2 = ReaxFF(ff_file_path=get_datafile("ffield.reax.new"),
+calc_gpaw = GPAW(nbands=2, txt="h2_1.txt")
+calc_reaxff = ReaxFF(ff_file_path=get_datafile("ffield.reax.new"),
                 implementation="C")
-calc_2_cell = (100*a, 100*a, 100*a)
+reaxff_cell = (100*a, 100*a, 100*a)
+gpaw_cell = (a, a, a)
 
 
 filter_full_system = AtomListSelector(Mixer.get_atom_ids(atoms),
@@ -32,40 +33,45 @@ filter_full_system = AtomListSelector(Mixer.get_atom_ids(atoms),
 
 filter_qm_region = AtomListSelector((0, 1), {0: 1.0, 1: 0.0})
 
-forces_full_system = ForceCalculation("forces_full_sys", filter_full_system)
-forces_full_system.calculator = calc_2
-forces_full_system.cell = calc_2_cell
+forces_full_system = ForceCalculation("forces_full_sys",
+                                      selector=filter_full_system,
+                                      calculator=calc_reaxff,
+                                      cell=reaxff_cell)
 
-forces_qm_region = ForceCalculation("forces_qm", filter_qm_region)
-forces_qm_region.calculator = calc_1
-forces_qm_region.cell = (a, a, a)
+forces_qm_gpaw = ForceCalculation("forces_qm_gpaw",
+                                  selector=filter_qm_region,
+                                  calculator=calc_gpaw,
+                                  cell=gpaw_cell)
+
+forces_qm_reaxff = ForceCalculation("forces_qm_reaxff",
+                                    selector=filter_qm_region,
+                                    calculator=calc_reaxff,
+                                    cell=reaxff_cell)
 
 energy_full_system_reaxff = EnergyCalculation("energy_full_sys",
-                                              filter_full_system)
-energy_full_system_reaxff.calculator = calc_2
-energy_full_system_reaxff.cell = calc_2_cell
-energy_full_system_reaxff.coeff = 1.0
+                                              selector=filter_full_system,
+                                              calculator=calc_reaxff,
+                                              cell=reaxff_cell)
 
 energy_qm_region_reaxff = EnergyCalculation("energy_qm_reaxff",
-                                            filter_qm_region)
-energy_qm_region_reaxff.calculator = calc_2
-energy_qm_region_reaxff.cell = calc_2_cell
-energy_qm_region_reaxff.coeff = -1.0
+                                            selector=filter_qm_region,
+                                            calculator=calc_reaxff,
+                                            cell=reaxff_cell,
+                                            coeff=-1.0)
 
 energy_qm_region_gpaw = EnergyCalculation("energy_qm_gpaw",
-                                          filter_qm_region)
-energy_qm_region_gpaw.calculator = calc_1
-energy_qm_region_gpaw.cell = (a, a, a)
-energy_qm_region_gpaw.coeff = 1.0
+                                          selector=filter_qm_region,
+                                          calculator=calc_gpaw,
+                                          cell=gpaw_cell)
 
-mixer_forces = (forces_full_system, forces_qm_region)
+mixer_forces = (forces_full_system, forces_qm_gpaw, forces_qm_reaxff)
 mixer_energies = (energy_full_system_reaxff,
                 energy_qm_region_reaxff,
                 energy_qm_region_gpaw)
 
 
 atoms.center()
-mixer = Mixer(forces=mixer_forces,
+mixer = Mixer(name="H2_mixer", forces=mixer_forces,
               energies=mixer_energies)
 
 atoms.set_calculator(mixer)

@@ -46,7 +46,7 @@ class AtomListSelector(AtomSelector):
     for a selector that provides a better spatial calculation region support,
     see CalcBox.
     """
-    def __init__(self, atom_ids=None, weights=None):
+    def __init__(self, atom_ids, weights):
         super(AtomListSelector, self).__init__()
         self._atom_ids = atom_ids
         self._weights = weights
@@ -100,7 +100,7 @@ class CalcRegion(AtomSelector):
     to carve up the system space for different calculators while
     allowing atoms to move around freely.
     """
-    def __init__(self, name=None, pos=(0,0,0), cutoff=2.0, pbc=None, debug=0):
+    def __init__(self, name, pos=(0,0,0), cutoff=2.0, pbc=None, debug=0):
         """
         @type pos:      tuple(float, float, float)
         @param pos:     Coordinates for the center of the region
@@ -284,7 +284,7 @@ class CalcBox(CalcRegion):
     constructor. It's simply passed on to the generated Atoms object, so it
     should adhere to the ASE documentation.
     """
-    def __init__(self, name=None, pos=(0,0,0), dim=(1,1,1),
+    def __init__(self, name, pos=(0,0,0), dim=(1,1,1),
                  inner_dim=None, cutoff=2.0, pbc=None, debug=0):
         """
         @type pos:          tuple(float, float, float)

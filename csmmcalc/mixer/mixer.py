@@ -18,12 +18,12 @@ class Calculation(object):
     ForceCalculation and EnergyCalculation
     """
 
-    def __init__(self, name=None, selector=None):
+    def __init__(self, name, selector, calculator, cell, coeff=1.0):
         self._name = name
-        self._calculator = None
         self._selector = selector
-        self.cell = None
-        self.coeff = 1.0
+        self._calculator = calculator
+        self._cell = cell
+        self._coeff = coeff
  
     def _set_calculator(self, value):
         # check that value at least looks like a calculator
@@ -32,6 +32,15 @@ class Calculation(object):
                 hasattr(value, "get_potential_energy")):
             raise ValueError("Invalid calculator object given")
         self._calculator = value
+
+    def _get_name(self):
+        return self._name
+
+    def _set_name(self, value):
+        self._name = value
+
+    def _del_name(self):
+        del self._name
 
     def _get_calculator(self):
         return self._calculator
@@ -48,12 +57,38 @@ class Calculation(object):
     def _del_selector(self):
         del self._selector
 
+    def _set_cell(self, value):
+        self._cell = value
+    
+    def _get_cell(self):
+        return self._cell
 
+    def _del_cell(self):
+        del self._cell
+
+    def _set_coeff(self, value):
+        self._coeff = value
+    
+    def _get_coeff(self):
+        return self._coeff
+
+    def _del_coeff(self):
+        del self._coeff
+
+    name = property(_get_name, _set_name, _del_name, "Name property")
+    
     calculator = property(_get_calculator, _set_calculator, 
             _del_calculator, "Calculator property")
     
     selector = property(_get_selector, _set_selector,
                         _del_selector, "Selector property")
+    
+    cell = property(_get_cell, _set_cell,
+                        _del_cell, "Cell property")
+
+    coeff = property(_get_coeff, _set_coeff,
+                        _del_coeff, "Coeff property")
+
 
     def calculation_required(self, atoms, quantities):
         subset, subset_map, weights = self.get_subset(atoms)
@@ -106,8 +141,10 @@ class ForceCalculation(Calculation):
     multi-scale setup.
     """
     
-    def __init__(self, name=None, selector=None, debug=0, debug_file=None):
-        super(ForceCalculation, self).__init__(name, selector)
+    def __init__(self, name, selector, calculator, cell, coeff=1.0,
+                 debug=0, debug_file=None):
+        super(ForceCalculation, self).__init__(name, selector,
+                calculator, cell, coeff)
         self.default_weight = 0.0
         self._debug = debug
         self._debug_file = debug_file
@@ -155,8 +192,9 @@ class EnergyCalculation(Calculation):
     sub-calculators to produce energies for subsets
     of the atoms.
     """
-    def __init__(self, name=None, selector=None):
-        super(EnergyCalculation, self).__init__(name, selector)
+    def __init__(self, name, selector, calculator, cell, coeff=1.0):
+        super(EnergyCalculation, self).__init__(name, selector,
+                calculator, cell, coeff)
 
     def get_energy(self, atoms, force_consistent=False):
         """
@@ -185,7 +223,7 @@ class Mixer(Calculator):
     Please look at tests/mixer/h2_mixer.py for an example of how
     to use this calculator.
     """
-    def __init__(self, name=None, forces=None, energies=None, debug=0):
+    def __init__(self, name, forces, energies, debug=0):
         """
         @type forces:           [ForceCalculation]
         @param forces:          list of Mixer.ForceCalculation to 
