@@ -27,8 +27,8 @@ reaxff_cell = (100*a, 100*a, 100*a)
 gpaw_cell = (a, a, a)
 
 
-filter_full_system = AtomListSelector(Mixer.get_atom_ids(atoms),
-                        {0: 0.0,
+filter_full_system = AtomListSelector((0, 1),
+                        {0: 1.0,
                          1: 1.0})
 
 filter_qm_region = AtomListSelector((0, 1), {0: 1.0, 1: 0.0})
