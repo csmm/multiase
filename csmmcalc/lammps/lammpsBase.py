@@ -194,6 +194,11 @@ class LAMMPSBase:
         self.close_calculation()
         
     def setup_calculation(self, atoms):
+        inv_cell = np.linalg.inv(atoms.cell)
+        frac_positions = np.dot(inv_cell, atoms.positions.T)
+        if np.any(frac_positions < 0) or np.any(frac_positions > 1):
+	  raise RuntimeError("Atoms not inside calculation cell! Use Atoms.center(vacuum).")
+	
         self.atoms = atoms
         self.prepare_calculation()
         self.prism = prism(self.atoms.get_cell())
@@ -408,14 +413,14 @@ class LAMMPSBase:
         
         # Atoms
         charges = self.atoms.get_charges()
-        lammps_positions = p.pos_to_lammps(self.atoms.get_positions())
+        lammps_positions = p.pos_to_lammps(self.atoms.positions)
         positions = self.from_ase_units(lammps_positions, 'distance')
         if self.parameters.atom_style == 'full':
-            table = [['1', tp, a.charge, a.x, a.y, a.z]
-                for tp, a in zip(self.data.atom_types, self.atoms)]
+            table = [['1', tp, q] + list(pos)
+                for tp, q, pos in zip(self.data.atom_types, charges, positions)]
         elif  self.parameters.atom_style == 'charge':
-            table = [[tp, a.charge, a.x, a.y, a.z]
-                for tp, a in zip(self.data.atom_types, self.atoms)]
+            table = [[tp, q] + list(pos)
+                for tp, q, pos in zip(self.data.atom_types, charges, positions)]
         else:
             raise RuntimeError('Unsupported atom_style: %s' % self.parameters.atom_style)
         print_table('Atoms', table)

@@ -5,11 +5,12 @@ from ase import units
 
 class LAMMPSOptimizer(Dynamics):
 	""" Geometry optimizer for LAMMPS. works only with LAMMPS calculators """
-	def __init__(self, atoms, restart=None, logfile=None, trajectory=None):
+	def __init__(self, atoms, restart=None, logfile=None, trajectory=None, algorithm='cg'):
 		Dynamics.__init__(self, atoms, logfile, trajectory)
+		self.algorithm = algorithm
 		
-	def run(self, fmax=0.001, steps=1e8, min_style=None):
-		self.atoms.calc.minimize(self.atoms, ftol=fmax, maxeval=steps, min_style=min_style)
+	def run(self, fmax=0.001, steps=1e8):
+		self.atoms.calc.minimize(self.atoms, ftol=fmax, maxeval=steps, min_style=self.algorithm)
 
 		
 class LAMMPSMolecularDynamics(Dynamics):
@@ -83,3 +84,15 @@ class LAMMPS_NVT(LAMMPSMolecularDynamics):
 		t_damp = atoms.calc.from_ase_units(t_damp, 'time')
 		
 		self.fix = '%s %f %f %f' %(cmd, temperature, temperature, t_damp)
+		
+
+class LAMMPS_NPT(LAMMPSMolecularDynamics):
+	""" Constant temperature and pressure calculations with Nose-Hoover """
+	def __init__(self, atoms, timestep, temperature, pressure, t_damp=100*units.fs, p_damp=100*units.fs, **kwargs):
+		LAMMPSMolecularDynamics.__init__(self, atoms, timestep, **kwargs)
+			
+		pressure = atoms.calc.from_ase_units(pressure, 'pressure')
+		t_damp = atoms.calc.from_ase_units(t_damp, 'time')
+		p_damp = atoms.calc.from_ase_units(p_damp, 'time')
+		
+		self.fix = 'npt temp %f %f %f iso %f %f %f' %(temperature, temperature, t_damp, pressure, pressure, p_damp)
