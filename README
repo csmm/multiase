@@ -1,14 +1,16 @@
 ================================
-CSMM ASE CALCULATORS AND SCRIPTS
+MultiASE CALCULATORS AND SCRIPTS
 ================================
 
+Copyright (c) 2012 Aalto University
+Authors: Lauri Leukkunen, Tuukka Verho, Olga Lopez Acevedo
 
 Description of directory structure
 **********************************
 
 ::
 
-  csmmcalc/		- contains all CSMM ASE calculators
+  MultiASE/		- contains all MultiASE calculators
   	lammps/		- modified ASE lammps interface
   	mixer/		- mixer calculator for combining gpaw and lammps
 
