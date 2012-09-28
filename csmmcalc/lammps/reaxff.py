@@ -1,4 +1,4 @@
-from lammpsBase import LAMMPSBase
+from lammpsbase import LAMMPSBase
 from tempfile import NamedTemporaryFile
 import numpy as np
 
@@ -15,7 +15,7 @@ def get_element_order(ff_file):
 class ReaxFF(LAMMPSBase):
 	
 	def __init__(self, label='reaxff', specorder=None, ff_file_path='ffield.reax',
-		implementation='Fortran', update_charges=True, save_bond_orders=False, debug_energy=False, **kwargs):
+		implementation='C', update_charges=True, save_bond_orders=False, debug_energy=False, **kwargs):
 		
 		LAMMPSBase.__init__(self, label, update_charges = update_charges, **kwargs)
 		

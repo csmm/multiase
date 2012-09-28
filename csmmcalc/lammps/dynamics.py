@@ -88,7 +88,7 @@ class LAMMPS_NVT(LAMMPSMolecularDynamics):
 
 class LAMMPS_NPT(LAMMPSMolecularDynamics):
 	""" Constant temperature and pressure calculations with Nose-Hoover """
-	def __init__(self, atoms, timestep, temperature, pressure, t_damp=100*units.fs, p_damp=100*units.fs, **kwargs):
+	def __init__(self, atoms, timestep, temperature, pressure, t_damp=100*units.fs, p_damp=1000*units.fs, **kwargs):
 		LAMMPSMolecularDynamics.__init__(self, atoms, timestep, **kwargs)
 			
 		pressure = atoms.calc.from_ase_units(pressure, 'pressure')

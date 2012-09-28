@@ -1,4 +1,4 @@
-from lammpsBase import LAMMPSBase
+from lammpsbase import LAMMPSBase
 from ase.data import covalent_radii
 from ase.atoms import Atoms
 from ase.atom import Atom, atomproperty
@@ -14,7 +14,6 @@ class CHARMM(LAMMPSBase):
 		
 		self.parameters.units          = 'real'
 		self.parameters.pair_style     = 'lj/charmm/coul/charmm 8.0 10.0'
-		#self.parameters.pair_style     = 'lj/cut/coul/cut 10.0'
 		self.parameters.bond_style     = 'harmonic'
 		self.parameters.angle_style    = 'charmm'
 		self.parameters.dihedral_style = 'charmm'

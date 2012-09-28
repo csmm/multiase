@@ -1,11 +1,12 @@
 import os
+from os import path
 from ase import units
 from ase.md.md import MolecularDynamics
 import numpy as np
 
 
 csmm_config = {
-        "CSMM_INSTALL_DIR":"./",
+        "CSMM_INSTALL_DIR":path.split(path.dirname(path.realpath(__file__)))[0],
         }
 
 def get_config(key):

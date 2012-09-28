@@ -1,4 +1,4 @@
-from lammpsBase import LAMMPSBase
+from lammpsbase import LAMMPSBase
 from ase.data import covalent_radii
 from ase.atoms import Atoms
 from ase.atom import Atom, atomproperty
@@ -18,23 +18,15 @@ class COMPASS(LAMMPSBase):
 		self.parameters.angle_style    = 'class2'
 		self.parameters.dihedral_style = 'class2'
 		self.parameters.improper_style = 'class2'
+		self.parameters.special_bonds  =  'lj/coul 0.0 0.0 1.0 dihedral yes'
 		
-		# Read force field file
-		self.use_ff_file(ff_file_path)
 		self.ff_parameters = readFrc.read(open(ff_file_path))
 		
-		# TODO
-		# pair_modify     tail yes
-		# special_bonds   lj/coul 0.0 0.0 1.0 dihedral yes	
-	
-	def set_bonds(self, bonds):
-		self.raw_bonds = [(bond[0].index, bond[1].index) for bond in bonds]
 	
 	def prepare_calculation(self):
 		""" Fill self.data """
 		
 		self.data.clear()
-		
 		atoms = self.atoms
 		
 		if not atoms.has('bonds'):
