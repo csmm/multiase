@@ -9,7 +9,7 @@ import io
 from ase import Atoms
 from ase.calculators.interface import Calculator
 
-from csmmcalc.lammps.reaxff import ReaxFF
+from multiasecalc.lammps.reaxff import ReaxFF
 
 class Calculation(object):
     """
@@ -326,15 +326,15 @@ class Mixer(Calculator):
                                   # the ASE interface.py
 
         # create id array if it is not yet set
-        if not atoms.has("csmmcalc.mixer.atom_ids"):
+        if not atoms.has("multiasecalc.mixer.atom_ids"):
             Mixer.set_atom_ids(atoms)
 
     @staticmethod
     def set_atom_ids(atoms):
         ids = np.array(range(len(atoms)))
-        atoms.new_array("csmmcalc.mixer.atom_ids", ids)
+        atoms.new_array("multiasecalc.mixer.atom_ids", ids)
 
     @staticmethod
     def get_atom_ids(atoms):
-        return list(atoms.get_array("csmmcalc.mixer.atom_ids"))
+        return list(atoms.get_array("multiasecalc.mixer.atom_ids"))
 
