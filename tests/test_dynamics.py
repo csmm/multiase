@@ -1,8 +1,8 @@
 from ase.atoms import Atoms
-from csmmcalc.lammps.reaxff import ReaxFF
-from csmmcalc.lammps.compass import COMPASS
-from csmmcalc.lammps.dynamics import LAMMPSOptimizer, LAMMPS_NVT
-from csmmcalc.utils import get_datafile
+from multiasecalc.lammps.reaxff import ReaxFF
+from multiasecalc.lammps.compass import COMPASS
+from multiasecalc.lammps.dynamics import LAMMPSOptimizer, LAMMPS_NVT
+from multiasecalc.utils import get_datafile
 from ase.data import s22
 from ase import units
 import numpy as np

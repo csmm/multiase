@@ -1,9 +1,9 @@
 # Copyright (C) 2012 Aalto University
 # Author: Lauri Leukkunen <lauri.leukkunen@aalto.fi>
 
-from csmmcalc.mixer.octree import OctreeNode
-from csmmcalc.mixer.mixer import Mixer
-from csmmcalc.mixer.selector import CalcBox
+from multiasecalc.mixer.octree import OctreeNode
+from multiasecalc.mixer.mixer import Mixer
+from multiasecalc.mixer.selector import CalcBox
 from ase.atoms import Atoms
 from ase.structure import molecule
 

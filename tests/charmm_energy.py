@@ -1,9 +1,9 @@
 import pickle
 from ase.structure import molecule as mol
 from ase import Atoms
-from csmmcalc.lammps.charmm import CHARMM
-from csmmcalc.lammps.dynamics import LAMMPSOptimizer
-from csmmcalc.utils import get_datafile
+from multiasecalc.lammps.charmm import CHARMM
+from multiasecalc.lammps.dynamics import LAMMPSOptimizer
+from multiasecalc.utils import get_datafile
 
 from energy import Fragmentation
 
@@ -56,7 +56,7 @@ class CHARMMSystem():
         return e
 
 def calculate_charges(atoms):
-    from csmmcalc.lammps.reaxff import ReaxFF
+    from multiasecalc.lammps.reaxff import ReaxFF
     atoms.center(vacuum=1)
     atoms.calc = ReaxFF(ff_file_path=get_datafile('ffield.reax'), parameters = dict(neighbor='2.0 nsq'))
     atoms.get_potential_energy()

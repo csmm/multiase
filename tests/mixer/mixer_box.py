@@ -16,12 +16,12 @@ import sys
 
 from gpaw import GPAW
 
-from csmmcalc.mixer.mixer import Mixer
-from csmmcalc.mixer.mixer import EnergyCalculation, ForceCalculation
+from multiasecalc.mixer.mixer import Mixer
+from multiasecalc.mixer.mixer import EnergyCalculation, ForceCalculation
 
-from csmmcalc.lammps.reaxff import ReaxFF
-from csmmcalc.utils import get_datafile, DynTesting
-from csmmcalc.mixer.selector import CalcBox
+from multiasecalc.lammps.reaxff import ReaxFF
+from multiasecalc.utils import get_datafile, DynTesting
+from multiasecalc.mixer.selector import CalcBox
 
 import numpy as np
 import cPickle as pickle

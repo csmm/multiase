@@ -1,6 +1,6 @@
 from ase import Atoms
-from csmmcalc.lammps.reaxff import ReaxFF
-from csmmcalc.utils import get_datafile
+from multiasecalc.lammps.reaxff import ReaxFF
+from multiasecalc.utils import get_datafile
 
 d = 0.74
 #d = 3.0

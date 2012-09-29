@@ -3,10 +3,10 @@ from gpaw import GPAW
 from ase.data import s22
 from gpaw.mpi import rank
 
-from csmmcalc.mixer.selector import AtomListSelector
-from csmmcalc.mixer.mixer import Mixer, EnergyCalculation, ForceCalculation
-from csmmcalc.lammps.reaxff import ReaxFF
-from csmmcalc.utils import get_datafile
+from multiasecalc.mixer.selector import AtomListSelector
+from multiasecalc.mixer.mixer import Mixer, EnergyCalculation, ForceCalculation
+from multiasecalc.lammps.reaxff import ReaxFF
+from multiasecalc.utils import get_datafile
 
 import numpy as np
 

@@ -1,9 +1,9 @@
 import pickle
 from ase.structure import molecule as mol
 from ase import Atoms
-from csmmcalc.lammps.compass import COMPASS
-from csmmcalc.lammps.dynamics import LAMMPSOptimizer
-from csmmcalc.utils import get_datafile
+from multiasecalc.lammps.compass import COMPASS
+from multiasecalc.lammps.dynamics import LAMMPSOptimizer
+from multiasecalc.utils import get_datafile
 
 from energy import Fragmentation
 
