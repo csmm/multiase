@@ -20,8 +20,5 @@ class CHARMM(LAMMPSBase):
 		self.type_resolver = typing.TypeResolver(charmmtypes.data)
 	
 	def atom_types(self, atoms):
-		try:
-			return [self.type_resolver.resolve(atom).type for atom in atoms]
-		except AttributeError:
-			raise RuntimeError('Could not resolve all types!')
+		return [self.type_resolver.resolve(atom).type for atom in atoms]
 		

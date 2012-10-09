@@ -4,6 +4,7 @@ from lammpsbase import detect_bonds
 
 class SyntaxError(Exception): pass
 class PrecedenceError(Exception): pass
+class TypingError(Exception): pass
 
 class TypeResolver:
 	def __init__(self, typedata):
@@ -25,7 +26,8 @@ class TypeResolver:
 	
 	def resolve(self, atom):
 		matches = [temp for temp in self.templates if temp.match(atom)]
-		if not matches: return None
+		if not matches:
+			raise TypingError('Could not resolve type for atom %s' % atom)
 		if len(matches) == 1: return matches[0]
 		
 		precs = self.precedences

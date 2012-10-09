@@ -118,6 +118,10 @@ class LAMMPSBase:
 		""" Implement this method in subclasses"""
 		raise NotImplementedException()
 	
+	def set_charges(self, atoms, atom_types):
+		""" Implement this method in subclasses if needed"""
+		pass
+	
 	def prepare_calculation(self, atoms, data):
 		""" Implement this method in subclasses if needed"""
 		pass
@@ -387,6 +391,20 @@ class LAMMPSBase:
 		dihedrals = Dihedral.all_dihedrals(atoms)
 		impropers = Improper.all_impropers(atoms)
 		
+		for bond in bonds:
+			bond.type = SequenceType(atom_types[i] for i in bond.atoms)
+			
+		for angle in angles:
+			angle.type = SequenceType(atom_types[i] for i in angle.atoms)
+			
+		for dihedral in dihedrals:
+			dihedral.type = SequenceType(atom_types[i] for i in dihedral.atoms)
+			
+		for improper in impropers:
+			central_type = atom_types[improper.central_atom]
+			other_types = [atom_types[i] for i in improper.other_atoms]
+			improper.type = ImproperType([central_type] + other_types)
+		
 		tables = []
 		ff_data = self.ff_data
 		
@@ -399,7 +417,7 @@ class LAMMPSBase:
 			return d.items()
 			
 			
-		def coeff_table_generator(title, params, typeorder, empty_value=None, warn_missing=False):
+		def coeff_table_generator(title, params, typeorder, empty_value, warn_missing):
 			for type in typeorder:
 				try:
 					yield params[type][title]
@@ -420,7 +438,7 @@ class LAMMPSBase:
 				typeorder = params.keys()
 				
 			for title, ncols in get_tablenames(params):
-				table = coeff_table_generator(title, params, typeorder, empty_value=[0]*ncols, warn_missing=warn_missing)
+				table = coeff_table_generator(title, params, typeorder, [0]*ncols, warn_missing)
 				tables.append((title, table))
 			return typeorder
 		
@@ -430,12 +448,13 @@ class LAMMPSBase:
 			
 		add_coeff_tables(ff_data.atom, atom_types, atom_typeorder)
 		
-		bond_typeorder     = add_coeff_tables(ff_data.bond, bonds)
+		bond_typeorder     = add_coeff_tables(ff_data.bond, bonds, warn_missing=True)
 		angle_typeorder    = add_coeff_tables(ff_data.angle, angles)
 		dihedral_typeorder = add_coeff_tables(ff_data.dihedral, dihedrals)
 		improper_typeorder = add_coeff_tables(ff_data.improper, impropers)
 		
 		# Atoms
+		self.set_charges(atoms, atom_types)
 		atom_typeids = [atom_typeorder.index(at)+1 for at in atom_types]
 		charges = self.atoms.get_charges()
 		positions = self.prism.vector_to_lammps(self.atoms.positions)
@@ -734,7 +753,7 @@ class _Base:
 	def __init__(self, atoms):
 		self.atoms = list(atoms)
 		self.type = None
-	def __str__(self):
+	def __repr__(self):
 		return str(self.type)
 		
 class Bond(_Base):
@@ -774,12 +793,12 @@ class Improper:
 		self.class2 = class2
 	@property
 	def atoms(self):
-		if class2:
+		if self.class2:
 			return [other_atoms[0], self.central_atoms] + other_atoms[1:]
 		else:
 			return [self.central_atom] + other_atoms
 			
-	def __str__(self):
+	def __repr__(self):
 		return '%s, %s' % (str(self.central_atom), str(self.other_atoms))
 	@classmethod
 	def all_impropers(cls, atoms):
@@ -814,3 +833,5 @@ class ImproperType:
 		return self.central == other.central and self.others == other.others
 	def __hash__(self):
 		return hash(self.central) + sum(hash(tp) for tp in self.others)
+	def __repr__(self):
+		return '%s, %s' %(self.central, self.others)

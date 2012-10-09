@@ -19,21 +19,16 @@ class COMPASS(LAMMPSBase):
 		self.type_resolver = typing.TypeResolver(compasstypes.data)
 	
 	def atom_types(self, atoms):
-		try:
-			return [self.type_resolver.resolve(atom).type for atom in atoms]
-		except AttributeError:
-			raise RuntimeError('Could not resolve all types!')
-		
+		return [self.type_resolver.resolve(atom).type for atom in atoms]
 	
-	def prepare_calculation(self, atoms, data):
+	def set_charges(self, atoms, atom_types):
 		bonds = atoms.get_array('bonds')
-		types = data.atom_types
 		
 		for i in range(len(atoms)):
 			q = 0
-			t1 = types[i]
+			t1 = atom_types[i]
 			for j in bonds[i]:
-				t2 = types[j]
+				t2 = atom_types[j]
 				increment = self.bond_increments.get((t1,t2))
 				if increment:
 					q += increment[0]
