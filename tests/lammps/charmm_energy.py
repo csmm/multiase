@@ -46,7 +46,7 @@ class CHARMMSystem():
         try:
             if self.minimize:
                 optimizer = LAMMPSOptimizer(self.system)
-                optimizer.run(min_style='cg')
+                optimizer.run()
             e = self.system.get_potential_energy()
             self.system._del_calculator()
         except:
@@ -77,7 +77,7 @@ def test_s22():
         'Formic_acid_dimer',
         'Formamide_dimer',
         'Uracil_dimer_h-bonded',
-        #'2-pyridoxine_2-aminopyridine_complex',
+        '2-pyridoxine_2-aminopyridine_complex',
         'Adenine-thymine_Watson-Crick_complex',
         'Methane_dimer',
         'Ethene_dimer',
@@ -87,10 +87,10 @@ def test_s22():
         'Uracil_dimer_stack',
         'Indole-benzene_complex_stack',
         'Adenine-thymine_complex_stack',
-        #'Ethene-ethyne_complex',
+        'Ethene-ethyne_complex',
         'Benzene-water_complex',
         'Benzene-ammonia_complex',
-        #'Benzene-HCN_complex',
+        'Benzene-HCN_complex',
         'Benzene_dimer_T-shaped',
         'Indole-benzene_T-shape_complex',
         'Phenol_dimer'

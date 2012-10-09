@@ -1,6 +1,7 @@
-from lammpsbase import LAMMPSBase
+from lammpsbase import LAMMPSBase, FFData
 from tempfile import NamedTemporaryFile
 import numpy as np
+import shutil, os
 
 def get_element_order(ff_file):
 	f = open(ff_file)
@@ -47,20 +48,20 @@ class ReaxFF(LAMMPSBase):
 			self.parameters.extra_cmds += ['variable %s equal c_reax[%i]' % (et, i) for i, et in enumerate(energy_terms, 1)]
 			
 			self._custom_thermo_args += ['v_%s' % et for et in energy_terms]
-		
+			
+		self.ff_data = FFData()
 	
-	def prepare_calculation(self):
-		self.data.clear()
-		
-		elements = self.atoms.get_chemical_symbols()
-		species = filter(lambda s: s in elements, self.specorder)
-		
-		self.data.atom_types = [species.index(element)+1 for element in elements]
-		
-		massDict = dict((el, mass) for el, mass in zip(elements, self.atoms.get_masses()))
-		self.data.masses = [massDict[el] for el in species]
-		
-		element_indices = [str(self.specorder.index(s)+1) for s in species]
+	def use_ff_file(self, filepath, target_filename=None):
+		if not target_filename: 
+			target_filename=os.path.split(filepath)[1]
+		shutil.copy(filepath, os.path.join(self.tmp_dir, target_filename))    
+	
+	def atom_types(self, atoms):
+		return atoms.get_chemical_symbols()
+	
+	def prepare_calculation(self, atoms, data):
+		typeorder = data.atom_typeorder
+		element_indices = [str(self.specorder.index(el)+1) for el in typeorder]
 		self.parameters.pair_coeffs = ['* * ffield.reax '+' '.join(element_indices)]
 	
 	
