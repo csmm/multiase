@@ -36,11 +36,13 @@ class LAMMPSMolecularDynamics(Dynamics):
 						interval=loginterval)
 		
 		self.fix = None
+		self.cell_relaxed = False
 		
 	def run(self, steps=50):
 		self.nsteps = 0
 		fix = 'all '+self.fix
-		calculation = self.atoms.calc.molecular_dynamics(self.atoms, self.dt, fix)
+		calc = self.atoms.calc
+		calculation = calc.molecular_dynamics(self.atoms, self.dt, fix, self.cell_relaxed)
 		calculation.next()
 		for target_step in xrange(0, steps+1):
 			for function, interval, args, kwargs in self.observers:
@@ -96,3 +98,4 @@ class LAMMPS_NPT(LAMMPSMolecularDynamics):
 		p_damp = atoms.calc.from_ase_units(p_damp, 'time')
 		
 		self.fix = 'npt temp %f %f %f iso %f %f %f' %(temperature, temperature, t_damp, pressure, pressure, p_damp)
+		self.cell_relaxed = True

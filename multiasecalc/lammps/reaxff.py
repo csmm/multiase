@@ -70,8 +70,8 @@ class ReaxFF(LAMMPSBase):
 		if self.save_bond_orders:
 			self.lammps_input.write('fix bondinfo all reax/bonds %s %s\n' % (freq, self.bondinfo_file.name))
 	
-	def read_lammps_trj(self):
-		LAMMPSBase.read_lammps_trj(self)
+	def read_lammps_trj(self, *args, **kwargs):
+		LAMMPSBase.read_lammps_trj(self, *args, **kwargs)
 		if self.save_bond_orders:
 			self.read_bondinfo()
 		

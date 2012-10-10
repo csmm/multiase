@@ -85,11 +85,8 @@ class LAMMPSBase:
 		self.keep_alive = keep_alive
 		self.lammps_command = lammps_command
 		self.debug = debug           
-		self.lammps_process = LammpsProcess()
+		self.lammps_process = LammpsProcess(log=debug)
 		self.calls = 0
-		
-		# Thermo output of LAMMPS, a list of dictionaries. See read_lammps_output()
-		self.thermo_content = []
 		
 		self._custom_thermo_args = [
 			'step', 'temp', 'press', 'cpu', 
@@ -131,20 +128,18 @@ class LAMMPSBase:
 
 	def get_potential_energy(self, atoms):
 		self.update(atoms)
-		energy = self.thermo_content[-1]['pe']
+		energy = self.lammps_process.get_thermo('pe')
 		return self.to_ase_units(energy, 'energy')
 
 	def get_forces(self, atoms):
 		self.update(atoms)
-		
 		return self.forces
 
 	def get_stress(self, atoms):
 		self.update(atoms)
-		tc = self.thermo_content[-1]
-		stress =  np.array([tc[i] for i in ('pxx','pyy','pzz',
-										'pyz','pxz','pxy')])
-		return self.to_ase_units(stress, 'stress')  
+		thermo = self.lammps_process.get_thermo
+		stress = [thermo(key) for key in ('pxx','pyy','pzz', 'pyz','pxz','pxy')]
+		return self.to_ase_units(np.array(stress), 'stress')  
 	
 	def calculation_required(self, atoms, quantities=None):
 		return atoms != self.atoms_after_last_calc
@@ -167,25 +162,26 @@ class LAMMPSBase:
 		self.close_calculation()
 
 		
-	def molecular_dynamics(self, atoms, timestep, fix):
-		nsteps = yield
+	def molecular_dynamics(self, atoms, timestep, fix, update_cell):
 		fix = fix
 		timestep = str(self.from_ase_units(timestep, 'time'))
 		self.setup_calculation(atoms)
 		self.evaluate_forces()
-		
 		cur_step = 0
+		nsteps = yield
 		while nsteps:
 			self.set_dumpfreq(cur_step+nsteps)
 			cur_step += nsteps
-			self.run_md(fix, timestep, nsteps)
+			self.run_md(fix, timestep, nsteps, update_cell)
 			self.atoms_after_last_calc = atoms
 			nsteps = yield
 		self.close_calculation()
 		
 	def setup_calculation(self, atoms):
+		filelabel = self.prepare_lammps_io()
+		
 		if not self.lammps_process.running():
-			self.lammps_process.start(self.tmp_dir, self.lammps_command)
+			self.lammps_process.start(self.tmp_dir, self.lammps_command, filelabel)
 				
 		if all(atoms.pbc == False): 
 			# Make sure the atoms are inside the cell
@@ -198,10 +194,8 @@ class LAMMPSBase:
 		self.prism = Prism(self.atoms.cell)
 		self.prepare_data()
 		self.prepare_calculation(self.atoms, self.data)
-		self.prepare_lammps_io()
 		self.write_lammps_input()
 		self.calls += 1
-	
 	
 	def close_calculation(self):
 		if not self.keep_alive:
@@ -216,26 +210,15 @@ class LAMMPSBase:
 		self.lammps_inputdata_file.close()
 		if self.debug == True: self.lammps_process.close_logs()
 		
-		self.atoms_after_last_calc = self.atoms.copy()
 			
 	def prepare_lammps_io(self):
-		# setup input and output files for LAMMPS
 		label = '%s%06d' % (self.label, self.calls)
-	
-		self.lammps_trj_file = NamedTemporaryFile(mode='r', prefix='trj_'+label,
-									dir=self.tmp_dir, delete=(not self.debug))
+		args = dict(dir=self.tmp_dir, delete=(not self.debug))
+		self.lammps_trj_file = NamedTemporaryFile(mode='r', prefix='trj_'+label, **args)
+		self.lammps_inputdata_file = NamedTemporaryFile(prefix='data_'+label, **args)
 		
-		self.lammps_inputdata_file = NamedTemporaryFile(prefix='data_'+label,
-									dir=self.tmp_dir, delete=(not self.debug))
+		return label
 	
-		if self.debug == True:
-			# Save LAMMPS input and output for reference
-			inlog = NamedTemporaryFile(prefix='in_'+label, dir=self.tmp_dir, delete=False)
-			outlog = NamedTemporaryFile(prefix='log_'+label, dir=self.tmp_dir, delete=False)
-			self.lammps_process.inlog = inlog
-			self.lammps_process.outlog = outlog
-		elif self.debug == 'stdout':
-			self.lammps_process.outlog = sys.stdout
 		
 	def evaluate_forces(self):
 		self.set_dumpfreq(1)
@@ -243,8 +226,8 @@ class LAMMPSBase:
 		f.write('run 0\n')
 		f.write('print "%s"\n' % CALCULATION_END_MARK)
 		f.flush()
-		self.read_lammps_output()
-		self.read_lammps_trj()
+		self.lammps_process.read_lammps_output()
+		self.read_lammps_trj(update_positions=False)
 		
 	def run_minimization(self, param_string, min_style=None):
 		self.set_dumpfreq(999999)
@@ -254,18 +237,18 @@ class LAMMPSBase:
 		f.write('minimize %s\n'  % param_string)
 		f.write('print "%s"\n' % CALCULATION_END_MARK)
 		f.flush()
-		self.read_lammps_output()
-		self.read_lammps_trj()
+		self.lammps_process.read_lammps_output()
+		self.read_lammps_trj(update_positions=True)
 		
-	def run_md(self, fix, timestep, nsteps):
+	def run_md(self, fix, timestep, nsteps, update_cell=False):
 		f = self.lammps_process
 		f.write('fix fix_all %s\n' % fix)
 		f.write('timestep %s\n' % timestep)
 		f.write('run %s\n' % nsteps)
 		f.write('print "%s"\n' % CALCULATION_END_MARK)
 		f.flush()
-		self.read_lammps_output()
-		self.read_lammps_trj()
+		self.lammps_process.read_lammps_output()
+		self.read_lammps_trj(update_positions=True, update_cell=update_cell)
 	
 	
 	def prepare_data(self):
@@ -507,56 +490,26 @@ class LAMMPSBase:
 			f.write('\n\n')
 		
 		f.flush()
-	
-	
-	def read_lammps_output(self):
-		""" Read thermo output from LAMMPS stdout """
-		f = self.lammps_process
-		
-		thermo_mark = ' '.join([x.capitalize() for x in
-											self._custom_thermo_args[0:3]])
-		
-		thermo_content = []
-		line = f.readline()
-		while line and line.strip() != CALCULATION_END_MARK:
-			if 'ERROR:' in line:
-				raise RuntimeError('LAMMPS execution in %s failed. LAMMPS %s' 
-						% (self.tmp_dir,line))
-			if line.startswith(thermo_mark):
-				# get thermo output
-				while True:
-					line = f.readline()
-					fields = line.split()
-					if len(fields) != len(self._custom_thermo_args): break
-					try:
-						fields = map(float, fields) # convert to float
-					except ValueError:                       
-						break   # Wasn't a thermo line after all
-					thermo_content.append(dict(zip(self._custom_thermo_args, fields)))
-					
-			else:
-				line = f.readline()
-		self.thermo_content = thermo_content
-		if len(thermo_content) == 0:
-			raise RuntimeError('No thermo output from LAMMPS!')
 
 
-	def read_lammps_trj(self):
-		dumps = read_lammps_dump(self.lammps_trj_file, slice(None))
-		dump = dumps[-1]
+	def read_lammps_trj(self, update_positions=False, update_cell=False):
+		dump = read_lammps_dump(self.lammps_trj_file)
 		
 		rotate = self.prism.vector_to_ase
 		self.forces = rotate(self.to_ase_units(dump.info['forces'], 'force'))
 		
-		if len(dumps) > 0:
+		if update_positions:
 			dump.positions -= dump.info['celldisp']
 			
 			self.atoms.positions = rotate(self.to_ase_units(dump.positions, 'distance'))
-			self.atoms.set_velocities(rotate(self.to_ase_units(dump.get_velocities(), 'velocity')))
-			self.atoms.set_cell(self.prism.vector_to_ase(dump.cell))
-			
+			self.atoms.set_velocities(rotate(self.to_ase_units(dump.get_velocities(), 'velocity')))			
 			if np.isnan(self.atoms.positions).any():
 					raise RuntimeError('NaN detected in atomic coordinates!')
+				
+			if update_cell:
+				self.atoms.set_cell(self.prism.vector_to_ase(dump.cell))
+				
+		self.atoms_after_last_calc = self.atoms.copy()
 			
 		if self.update_charges:
 			self.atoms.set_charges(dump.get_charges())
@@ -570,20 +523,23 @@ class LAMMPSBase:
 
 
 class LammpsProcess:
-	""" A class to handle the lammps process. There are sometimes errors related
-	    to the communication with the process and it is advisable to restart lammps
-	    after every calculation.
+	""" A class to handle the lammps process and read thermo output. There are
+		sometimes errors related to the communication with the process and it
+		is advisable to restart lammps after every calculation.
 	"""
-	def __init__(self, inlog=None, outlog=None):
-		self.inlog = inlog
-		self.outlog = outlog
+	def __init__(self, log=False):
+		self.inlog = None
+		self.outlog = None
 		self.proc = None
+		self.log = log
 		self.output_hack = False  # see invoke_lammps()
+		
+		self.thermo_output = []
 		
 	def __del__(self):
 		if self.running(): self.proc.terminate()
 		
-	def invoke_lammps(self, tmp_dir, lammps_command):
+	def invoke_lammps(self, tmp_dir, lammps_command, filelabel):
 		if not lammps_command:
 			lammps_command = os.environ.get('LAMMPS_COMMAND')
 		if not lammps_command or len(lammps_command.strip()) == 0:
@@ -602,10 +558,16 @@ class LammpsProcess:
 		
 		return Popen(lammps_cmd_line,
 							cwd=tmp_dir, stdin=PIPE, stdout=PIPE, stderr=sys.stderr)
+		
+		if self.log == True:
+			# Save LAMMPS input and output for reference
+			dir = self.tmp_dir
+			self.inlog  = NamedTemporaryFile(prefix='in_'+filelabel, dir=dir, delete=False)
+			self.outlog = NamedTemporaryFile(prefix='log_'+filelabel, dir=dir, delete=False)
 	
-	def start(self, tmp_dir, lammps_command=None):
+	def start(self, tmp_dir, lammps_command=None, filelabel=''):
 		if self.running(): self.terminate()
-		self.proc = self.invoke_lammps(tmp_dir, lammps_command)
+		self.proc = self.invoke_lammps(tmp_dir, lammps_command, filelabel)
 	
 	def running(self):
 		return self.proc and self.proc.poll() == None
@@ -636,6 +598,50 @@ class LammpsProcess:
 		if self.outlog: self.outlog.close()
 		self.inlog = None
 		self.outlog = None
+	
+	
+	def get_thermo(self, key):
+		""" Return the value of thermo variable key """
+		return self.thermo_output[-1][key]
+		
+	def read_lammps_output(self):
+		""" Read thermo output from LAMMPS stdout """
+		f = self
+		
+		def translate_keys(keys):
+			result = []
+			for key in keys:
+				if key == 'PotEng': k = 'pe'
+				elif key == 'KinEng': k = 'ke'
+				elif key == 'TotEng': k = 'etotal'
+				else: k = key.lower()
+				result.append(k)
+			return result
+		
+		thermo_output = []
+		line = f.readline()
+		while line and line.strip() != CALCULATION_END_MARK:
+			if 'ERROR:' in line:
+				raise RuntimeError('LAMMPS execution in %s failed. LAMMPS %s' 
+						% (self.tmp_dir,line))
+			if all(s[0].isupper() for s in line.split()[:5]):
+				# Seems to be the start of thermo output
+				keys = translate_keys(line.split())
+				while True:
+					line = f.readline()
+					fields = line.split()
+					if len(fields) != len(keys): break
+					try:
+						fields = map(float, fields) # convert to float
+					except ValueError:                       
+						break   # Wasn't a thermo line after all
+					thermo_output.append(dict(zip(keys, fields)))
+					
+			else:
+				line = f.readline()
+		self.thermo_output = thermo_output
+		if len(thermo_output) == 0:
+			raise RuntimeError('No thermo output from LAMMPS!')
 
 
 class Prism:
