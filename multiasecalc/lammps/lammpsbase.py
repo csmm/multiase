@@ -6,6 +6,7 @@ import numpy as np
 import unitconversion
 from itertools import combinations, permutations
 from bonds import Bonds
+from multiasecalc.lammps.io.lammps import read_lammps_dump
 
 __ALL__ = ['LAMMPSBase']
 
@@ -266,108 +267,6 @@ class LAMMPSBase:
 		self.read_lammps_output()
 		self.read_lammps_trj()
 	
-			
-	def write_lammps_input(self):
-		"""Write LAMMPS parameters and input data """
-		f = self.lammps_process
-		parameters = self.parameters
-		
-		self.write_lammps_data()
-		
-		f.write('# (written by ASE)\n')
-		f.write('clear\n')
-		f.write('atom_style %s \n' % parameters.atom_style)
-		
-		pbc = self.atoms.get_pbc()
-		f.write('units %s \n' % parameters.units)
-		f.write('boundary %s %s %s \n' % tuple('sp'[x] for x in pbc))
-		if parameters.neighbor:
-			f.write('neighbor %s \n' % (parameters.neighbor))
-		if parameters.newton:
-			f.write('newton %s \n' % (parameters.newton))
-
-		# Write interaction stuff
-		f.write('\n### interactions \n')
-		if parameters.pair_style:
-			f.write('pair_style %s \n' % parameters.pair_style)
-			
-		if parameters.bond_style and self.data.bonds:
-			f.write('bond_style %s \n' % parameters.bond_style)
-			
-		if parameters.angle_style and self.data.angles:
-			f.write('angle_style %s \n' % parameters.angle_style)
-			
-		if parameters.dihedral_style and self.data.dihedrals:
-			f.write('dihedral_style %s \n' % parameters.dihedral_style)
-			
-		if parameters.improper_style and self.data.impropers:
-			f.write('improper_style %s \n' % parameters.improper_style)
-		
-		if parameters.special_bonds:
-			f.write('special_bonds %s \n' % parameters.special_bonds)
-			
-		if parameters.pair_modify:
-			f.write('pair_modify %s \n' % parameters.pair_modify)
-		
-		f.write('\n### read data \n')
-		f.write('read_data %s\n' % self.lammps_inputdata_file.name)
-		
-		# Extra pair coeffs
-		for line in parameters.pair_coeffs:
-			f.write('pair_coeff %s \n' % line)
-		
-		for cmd in parameters.extra_cmds:
-			f.write(cmd + '\n')
-		
-		f.write('thermo_style custom %s\n' % (' '.join(self._custom_thermo_args)))
-		f.write('thermo 0\n')
-		
-		f.write('\ndump dump_all all custom ' +
-				'1 %s %s\n' % (self.lammps_trj_file.name, ' '.join(self._dump_fields)) )
-
-				
-	def set_dumpfreq(self, freq):
-		self.lammps_process.write('dump_modify dump_all every %s\n' % freq)
-		
-		
-	def write_lammps_data(self):
-		"""Write system configuration and force field parameters to file to be read
-		with read_data by LAMMPS."""
-		f = self.lammps_inputdata_file
-		data = self.data
-		
-		f.write(f.name + ' (written by ASE) \n\n')
-
-		f.write('%d \t atoms \n' % len(data.atom_types))
-		if data.bonds:     f.write('%d \t bonds \n' % len(data.bonds))
-		if data.angles:    f.write('%d \t angles \n' % len(data.angles))
-		if data.dihedrals: f.write('%d \t dihedrals \n' % len(data.dihedrals))
-		if data.impropers: f.write('%d \t impropers \n' % len(data.impropers))
-		
-		f.write('%d  atom types\n' % len(data.atom_typeorder))
-		if data.bonds:     f.write('%d  bond types\n' % len(data.bond_typeorder))
-		if data.angles:    f.write('%d  angle types\n' % len(data.angle_typeorder))
-		if data.dihedrals: f.write('%d  dihedral types\n' % len(data.dihedral_typeorder))
-		if data.impropers: f.write('%d  improper types\n' % len(data.improper_typeorder))
-
-		xhi, yhi, zhi, xy, xz, yz = self.prism.get_lammps_prism()
-		f.write('0.0 %f  xlo xhi\n' % xhi)
-		f.write('0.0 %f  ylo yhi\n' % yhi)
-		f.write('0.0 %f  zlo zhi\n' % zhi)
-		
-		if self.prism.is_skewed():
-			f.write('%f %f %f  xy xz yz\n' % (xy, xz, yz))
-		f.write('\n\n')
-		
-		for title, table in data.tables:
-			#if len(table) == 0: return
-			f.write('%s \n\n' % title)
-			for index, row in enumerate(table, 1):
-				f.write(('%d'+' %s'*len(row) +'\n') % ((index,) + tuple(row)))
-			f.write('\n\n')
-		
-		f.flush()
-	
 	
 	def prepare_data(self):
 		""" Prepare self.data for write_lammps_data() using self.ff_data """
@@ -506,6 +405,108 @@ class LAMMPSBase:
 		data.angle_typeorder    = angle_typeorder
 		data.dihedral_typeorder = dihedral_typeorder
 		data.improper_typeorder = improper_typeorder
+		
+	
+	def write_lammps_input(self):
+		"""Write LAMMPS parameters and input data """
+		f = self.lammps_process
+		parameters = self.parameters
+		
+		self.write_lammps_data()
+		
+		f.write('# (written by ASE)\n')
+		f.write('clear\n')
+		f.write('atom_style %s \n' % parameters.atom_style)
+		
+		pbc = self.atoms.get_pbc()
+		f.write('units %s \n' % parameters.units)
+		f.write('boundary %s %s %s \n' % tuple('sp'[x] for x in pbc))
+		if parameters.neighbor:
+			f.write('neighbor %s \n' % (parameters.neighbor))
+		if parameters.newton:
+			f.write('newton %s \n' % (parameters.newton))
+
+		# Write interaction stuff
+		f.write('\n### interactions \n')
+		if parameters.pair_style:
+			f.write('pair_style %s \n' % parameters.pair_style)
+			
+		if parameters.bond_style and self.data.bonds:
+			f.write('bond_style %s \n' % parameters.bond_style)
+			
+		if parameters.angle_style and self.data.angles:
+			f.write('angle_style %s \n' % parameters.angle_style)
+			
+		if parameters.dihedral_style and self.data.dihedrals:
+			f.write('dihedral_style %s \n' % parameters.dihedral_style)
+			
+		if parameters.improper_style and self.data.impropers:
+			f.write('improper_style %s \n' % parameters.improper_style)
+		
+		if parameters.special_bonds:
+			f.write('special_bonds %s \n' % parameters.special_bonds)
+			
+		if parameters.pair_modify:
+			f.write('pair_modify %s \n' % parameters.pair_modify)
+		
+		f.write('\n### read data \n')
+		f.write('read_data %s\n' % self.lammps_inputdata_file.name)
+		
+		# Extra pair coeffs
+		for line in parameters.pair_coeffs:
+			f.write('pair_coeff %s \n' % line)
+		
+		for cmd in parameters.extra_cmds:
+			f.write(cmd + '\n')
+		
+		f.write('thermo_style custom %s\n' % (' '.join(self._custom_thermo_args)))
+		f.write('thermo 0\n')
+		
+		f.write('\ndump dump_all all custom ' +
+				'1 %s %s\n' % (self.lammps_trj_file.name, ' '.join(self._dump_fields)) )
+
+				
+	def set_dumpfreq(self, freq):
+		self.lammps_process.write('dump_modify dump_all every %s\n' % freq)
+		
+		
+	def write_lammps_data(self):
+		"""Write system configuration and force field parameters to file to be read
+		with read_data by LAMMPS."""
+		f = self.lammps_inputdata_file
+		data = self.data
+		
+		f.write(f.name + ' (written by ASE) \n\n')
+
+		f.write('%d \t atoms \n' % len(data.atom_types))
+		if data.bonds:     f.write('%d \t bonds \n' % len(data.bonds))
+		if data.angles:    f.write('%d \t angles \n' % len(data.angles))
+		if data.dihedrals: f.write('%d \t dihedrals \n' % len(data.dihedrals))
+		if data.impropers: f.write('%d \t impropers \n' % len(data.impropers))
+		
+		f.write('%d  atom types\n' % len(data.atom_typeorder))
+		if data.bonds:     f.write('%d  bond types\n' % len(data.bond_typeorder))
+		if data.angles:    f.write('%d  angle types\n' % len(data.angle_typeorder))
+		if data.dihedrals: f.write('%d  dihedral types\n' % len(data.dihedral_typeorder))
+		if data.impropers: f.write('%d  improper types\n' % len(data.improper_typeorder))
+
+		xhi, yhi, zhi, xy, xz, yz = self.prism.get_lammps_prism()
+		f.write('0.0 %f  xlo xhi\n' % xhi)
+		f.write('0.0 %f  ylo yhi\n' % yhi)
+		f.write('0.0 %f  zlo zhi\n' % zhi)
+		
+		if self.prism.is_skewed():
+			f.write('%f %f %f  xy xz yz\n' % (xy, xz, yz))
+		f.write('\n\n')
+		
+		for title, table in data.tables:
+			#if len(table) == 0: return
+			f.write('%s \n\n' % title)
+			for index, row in enumerate(table, 1):
+				f.write(('%d'+' %s'*len(row) +'\n') % ((index,) + tuple(row)))
+			f.write('\n\n')
+		
+		f.flush()
 	
 	
 	def read_lammps_output(self):
@@ -540,102 +541,25 @@ class LAMMPSBase:
 			raise RuntimeError('No thermo output from LAMMPS!')
 
 
-	def read_lammps_trj_new(self):
-		""" Requires latest git ASE """
-		import io.lammps
-		dump = io.lammps.read_lammps_dump(self.lammps_trj_file, save_forces=True)
+	def read_lammps_trj(self):
+		dumps = read_lammps_dump(self.lammps_trj_file, slice(None))
+		dump = dumps[-1]
 		
 		rotate = self.prism.vector_to_ase
 		self.forces = rotate(self.to_ase_units(dump.info['forces'], 'force'))
 		
-		if self.timestep > 0:
-			dump.positions -= dump.get_celldisp()
+		if len(dumps) > 0:
+			dump.positions -= dump.info['celldisp']
 			
 			self.atoms.positions = rotate(self.to_ase_units(dump.positions, 'distance'))
-			self.atoms.set_momenta(rotate(self.to_ase_units(dump.get_momenta(), 'momentum')))
-			self.atoms.set_cell(set.prism.vector_to_ase(dump.cell))
+			self.atoms.set_velocities(rotate(self.to_ase_units(dump.get_velocities(), 'velocity')))
+			self.atoms.set_cell(self.prism.vector_to_ase(dump.cell))
 			
 			if np.isnan(self.atoms.positions).any():
 					raise RuntimeError('NaN detected in atomic coordinates!')
 			
 		if self.update_charges:
 			self.atoms.set_charges(dump.get_charges())
-		
-	def read_lammps_trj(self):
-		"""Read the LAMMPS dump file."""
-		f = self.lammps_trj_file
-		
-		while True:
-			line = f.readline()
-			if not line: break
-
-			if 'ITEM: TIMESTEP' in line:
-				timestep = int(f.readline())
-				n_atoms = 0
-				lo_bound = [] ; hi_bound = [] ; tilt = []
-				id = [] ; type = []
-				positions  = np.ones((len(self.atoms), 3)) * np.nan
-				forces     = np.ones((len(self.atoms), 3)) * np.nan
-				velocities = np.ones((len(self.atoms), 3)) * np.nan
-				charges    = np.ones((len(self.atoms), )) * np.nan
-
-			if 'ITEM: NUMBER OF ATOMS' in line:
-				line = f.readline()
-				n_atoms = int(line.split()[0])
-			
-			if 'ITEM: BOX BOUNDS' in line:
-				# save labels behind "ITEM: BOX BOUNDS" in triclinic case (>=lammps-7Jul09)
-				tilt_items = line.split()[3:]
-				for i in range(3):
-					line = f.readline()
-					fields = line.split()
-					lo_bound.append(float(fields[0]))
-					hi_bound.append(float(fields[1]))
-					if (len(fields) >= 3):
-						tilt.append(float(fields[2]))
-						
-				if len(tilt) == 0: 
-					lo = np.array(lo_bound)
-					hi = np.array(hi_bound)
-					offdiag = [0,0,0]
-				else:
-					xy, xz, yz = tilt
-					lo = np.array(lo_bound) - np.array([min(0,xy,xz,xy+xz), min(0,yz), 0])
-					hi = np.array(hi_bound) - np.array([max(0,xy,xz,xy+xz), max(0,yz), 0])
-					offdiag = tilt
-			
-			if 'ITEM: ATOMS' in line:
-				# (reliably) identify values by labels behind "ITEM: ATOMS" - requires >=lammps-7Jul09
-				column_names = line.split()[2:]
-				for n in range(n_atoms):
-					line = f.readline()
-					fields = dict(zip(column_names, line.split()))
-					id = int(fields['id'])
-						
-					pos   = [ float(fields[col]) for col in ['x', 'y', 'z'] ]
-					vel   = [ float(fields[col]) for col in ['vx', 'vy', 'vz'] ]
-					force = [ float(fields[col]) for col in ['fx', 'fy', 'fz'] ]
-					q     = float(fields['q'])
-					
-					origin = lo
-					rotate = self.prism.vector_to_ase
-					positions[id-1]  = rotate(self.to_ase_units(np.array(pos)-origin, 'distance'))
-					velocities[id-1] = rotate(self.to_ase_units(np.array(vel), 'velocity'))
-					forces[id-1]     = rotate(self.to_ase_units(np.array(force), 'force'))
-					charges[id-1]    = self.to_ase_units(q, 'charge')
-				
-				self.forces = forces
-				if timestep > 0:
-					self.atoms.set_positions(positions)
-					self.atoms.set_velocities(velocities)
-					
-					self.atoms.cell = self.prism.update_cell(hi-lo, offdiag)
-					
-				if self.update_charges:
-					self.atoms.set_charges(charges)
-				
-				if np.isnan(positions).any():
-					raise RuntimeError('NaN detected in atomic coordinates!')
 	
 	
 	def to_ase_units(self, value, quantity):
