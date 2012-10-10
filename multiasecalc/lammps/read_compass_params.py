@@ -130,7 +130,7 @@ def read(infile):
 		D  = values[:3]
 		E = D
 		if len(values) > 3: E = values[3:]
-		ff_data.add('dihedral', SequenceType(types), 'AngleTorsion', D + E + [theta0[angle1], theta0[angle2]])
+		ff_data.add('dihedral', SequenceType(types), 'AngleTorsion Coeffs', D + E + [theta0[angle1], theta0[angle2]])
 		
 	
 	# **** Wilson out of plane ****
