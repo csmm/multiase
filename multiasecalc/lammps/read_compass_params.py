@@ -25,6 +25,7 @@ def fileIterator(infile):
 
 def read(infile):
 	ff_data = FFData()
+	ff_data.class2 = True
 	
 	R0 = {}
 	theta0 = {}

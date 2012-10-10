@@ -5,6 +5,7 @@ from tempfile import mkdtemp, NamedTemporaryFile
 import numpy as np
 import unitconversion
 from itertools import combinations, permutations
+from bonds import Bonds
 
 __ALL__ = ['LAMMPSBase']
 
@@ -57,6 +58,7 @@ class FFData:
 		self.angle = {}
 		self.dihedral = {}
 		self.improper = {}
+		self.class2 = False
 		
 	def add(self, group, type, title, values):
 		groupdict = getattr(self, group)
@@ -149,9 +151,7 @@ class LAMMPSBase:
 	def update(self, atoms):
 		if not self.calculation_required(atoms): return
 		self.setup_calculation(atoms)
-		self.run_single_step()
-		self.read_lammps_output() 
-		self.read_lammps_trj()
+		self.evaluate_forces()
 		self.close_calculation()
 	
 	def minimize(self, atoms, etol=0, ftol=0, maxeval=100000, maxiter=100000000, min_style=None):
@@ -161,15 +161,8 @@ class LAMMPSBase:
 		minimize_params = '%g %g %i %i' % (etol, ftol, maxeval, maxiter)
 		
 		self.setup_calculation(atoms)
-		
-		# Observers may need data before the first iteration is run
-		self.run_single_step()
-		self.read_lammps_output()
-		self.read_lammps_trj()
-		
+		self.evaluate_forces()
 		self.run_minimization(minimize_params, min_style)
-		self.read_lammps_output()
-		self.read_lammps_trj()
 		self.close_calculation()
 
 		
@@ -178,19 +171,13 @@ class LAMMPSBase:
 		fix = fix
 		timestep = str(self.from_ase_units(timestep, 'time'))
 		self.setup_calculation(atoms)
-		
-		# Observers may need data before the first timestep is run
-		self.run_single_step()
-		self.read_lammps_output()
-		self.read_lammps_trj()
+		self.evaluate_forces()
 		
 		cur_step = 0
 		while nsteps:
 			self.set_dumpfreq(cur_step+nsteps)
 			cur_step += nsteps
 			self.run_md(fix, timestep, nsteps)
-			self.read_lammps_output()
-			self.read_lammps_trj()
 			self.atoms_after_last_calc = atoms
 			nsteps = yield
 		self.close_calculation()
@@ -207,11 +194,9 @@ class LAMMPSBase:
 				atoms.center(vacuum=0)
 
 		self.atoms = atoms
-		if atoms != self.atoms_after_last_calc:
-			self.prism = prism(self.atoms.get_cell())
-			self.data.clear()
-			self.prepare_data()
-			self.prepare_calculation(self.atoms, self.data)
+		self.prism = Prism(self.atoms.cell)
+		self.prepare_data()
+		self.prepare_calculation(self.atoms, self.data)
 		self.prepare_lammps_io()
 		self.write_lammps_input()
 		self.calls += 1
@@ -249,15 +234,16 @@ class LAMMPSBase:
 			self.lammps_process.inlog = inlog
 			self.lammps_process.outlog = outlog
 		elif self.debug == 'stdout':
-			inlog = None
-			outlog = sys.stdout
+			self.lammps_process.outlog = sys.stdout
 		
-	def run_single_step(self):
+	def evaluate_forces(self):
 		self.set_dumpfreq(1)
 		f = self.lammps_process
 		f.write('run 0\n')
 		f.write('print "%s"\n' % CALCULATION_END_MARK)
 		f.flush()
+		self.read_lammps_output()
+		self.read_lammps_trj()
 		
 	def run_minimization(self, param_string, min_style=None):
 		self.set_dumpfreq(999999)
@@ -267,6 +253,8 @@ class LAMMPSBase:
 		f.write('minimize %s\n'  % param_string)
 		f.write('print "%s"\n' % CALCULATION_END_MARK)
 		f.flush()
+		self.read_lammps_output()
+		self.read_lammps_trj()
 		
 	def run_md(self, fix, timestep, nsteps):
 		f = self.lammps_process
@@ -275,6 +263,8 @@ class LAMMPSBase:
 		f.write('run %s\n' % nsteps)
 		f.write('print "%s"\n' % CALCULATION_END_MARK)
 		f.flush()
+		self.read_lammps_output()
+		self.read_lammps_trj()
 	
 			
 	def write_lammps_input(self):
@@ -378,35 +368,45 @@ class LAMMPSBase:
 		
 		f.flush()
 	
+	
 	def prepare_data(self):
+		""" Prepare self.data for write_lammps_data() using self.ff_data """
+		
 		atoms = self.atoms
-		
-		if not atoms.has('bonds'):
-			detect_bonds(atoms)
-			
-		atom_types = self.atom_types(atoms)
-		atom_typeorder = list(set(atom_types))
-		bonds = Bond.all_bonds(atoms)
-		angles = Angle.all_angles(atoms)
-		dihedrals = Dihedral.all_dihedrals(atoms)
-		impropers = Improper.all_impropers(atoms)
-		
-		for bond in bonds:
-			bond.type = SequenceType(atom_types[i] for i in bond.atoms)
-			
-		for angle in angles:
-			angle.type = SequenceType(atom_types[i] for i in angle.atoms)
-			
-		for dihedral in dihedrals:
-			dihedral.type = SequenceType(atom_types[i] for i in dihedral.atoms)
-			
-		for improper in impropers:
-			central_type = atom_types[improper.central_atom]
-			other_types = [atom_types[i] for i in improper.other_atoms]
-			improper.type = ImproperType([central_type] + other_types)
-		
 		tables = []
 		ff_data = self.ff_data
+		
+		if not 'bonds' in atoms.info:
+			atoms.info['bonds'] = Bonds(atoms, autodetect=True)
+		
+		atom_types = self.atom_types(atoms)
+		atom_typeorder = list(set(atom_types))
+		
+		b = atoms.info['bonds']
+		bonds = []
+		for indices in b:
+			type = SequenceType([atom_types[i] for i in indices])
+			bonds.append(dict(indices=indices, type=type))
+			
+		angles = []
+		for indices in b.find_angles():
+			type = SequenceType([atom_types[i] for i in indices])
+			angles.append(dict(indices=indices, type=type))
+			
+		dihedrals = []
+		for indices in b.find_dihedrals():
+			type = SequenceType([atom_types[i] for i in indices])
+			dihedrals.append(dict(indices=indices, type=type))
+		
+		impropers = []
+		for indices in b.find_impropers():
+			if ff_data.class2:
+				j, i, k, l = indices
+			else:
+				i, j, k, l = indices
+			a, c, b, d = (atom_types[ind] for ind in indices)
+			type = ImproperType(central_type=a, other_types=(c,b,d), class2=ff_data.class2)
+			impropers.append(dict(indices=(i,j,k,l), type=type))
 		
 		# Coeffs
 		# Helper functions
@@ -415,7 +415,6 @@ class LAMMPSBase:
 			for entry in params.values():
 				d.update((name, len(params)) for name, params in entry.items())
 			return d.items()
-			
 			
 		def coeff_table_generator(title, params, typeorder, empty_value, warn_missing):
 			for type in typeorder:
@@ -428,7 +427,7 @@ class LAMMPSBase:
 		def add_coeff_tables(params, objects, typeorder=None, warn_missing=False):
 			if not params or not objects: return
 			if not typeorder:
-				used_types = set(object.type for object in objects)
+				used_types = set(object['type'] for object in objects)
 				used_params = {}
 				for type in used_types:
 					try: used_params[type] = params[type]
@@ -442,6 +441,7 @@ class LAMMPSBase:
 				tables.append((title, table))
 			return typeorder
 		
+		# Add masses to ff_data
 		masses = dict(zip(atom_types, self.atoms.get_masses()))
 		for type in atom_typeorder:
 			ff_data.add('atom', type, 'Masses', [masses[type]])
@@ -474,11 +474,11 @@ class LAMMPSBase:
 			table = []
 			used_objects = []
 			for obj in objects:
-				if obj.type not in typeorder:
+				if obj['type'] not in typeorder:
 					objects.remove(obj)
 					continue
-				typeid = typeorder.index(obj.type)+1
-				atoms = [idx+1 for idx in obj.atoms]
+				typeid = typeorder.index(obj['type'])+1
+				atoms = [idx+1 for idx in obj['indices']]
 				table.append([typeid] + atoms)
 				used_objects.append(obj)
 			tables.append((title, table))
@@ -539,6 +539,27 @@ class LAMMPSBase:
 		if len(thermo_content) == 0:
 			raise RuntimeError('No thermo output from LAMMPS!')
 
+
+	def read_lammps_trj_new(self):
+		""" Requires latest git ASE """
+		import io.lammps
+		dump = io.lammps.read_lammps_dump(self.lammps_trj_file, save_forces=True)
+		
+		rotate = self.prism.vector_to_ase
+		self.forces = rotate(self.to_ase_units(dump.info['forces'], 'force'))
+		
+		if self.timestep > 0:
+			dump.positions -= dump.get_celldisp()
+			
+			self.atoms.positions = rotate(self.to_ase_units(dump.positions, 'distance'))
+			self.atoms.set_momenta(rotate(self.to_ase_units(dump.get_momenta(), 'momentum')))
+			self.atoms.set_cell(set.prism.vector_to_ase(dump.cell))
+			
+			if np.isnan(self.atoms.positions).any():
+					raise RuntimeError('NaN detected in atomic coordinates!')
+			
+		if self.update_charges:
+			self.atoms.set_charges(dump.get_charges())
 		
 	def read_lammps_trj(self):
 		"""Read the LAMMPS dump file."""
@@ -691,10 +712,9 @@ class LammpsProcess:
 		if self.outlog: self.outlog.close()
 		self.inlog = None
 		self.outlog = None
-	
 
 
-class prism:
+class Prism:
 	"""The representation of the unit cell in LAMMPS"""
 
 	def __init__(self, cell, pbc=(True,True,True), digits=10):
@@ -710,10 +730,7 @@ class prism:
 
 	def get_lammps_prism(self):
 		return self.lammps_cell[(0,1,2,1,2,2), (0,1,2,0,0,1)]
-	
-	def cell_changed(self, xyz, offdiag):
-		return (self.to_cell_matrix(xyz, offidiag) != self.lammps_cell).any()
-	
+		
 	def update_cell(self, xyz, offdiag):
 		self.lammps_cell = self.to_cell_matrix(xyz, offdiag)
 		return np.dot(self.lammps_cell, self.R.T)
@@ -734,84 +751,13 @@ class prism:
 		cell_sq = self.lammps_cell**2
 		return np.sum(np.tril(cell_sq, -1)) / np.sum(np.diag(cell_sq)) > tolerance
 
-		
-def detect_bonds(atoms):
-	from ase.data import covalent_radii
-	tolerance = 1.1
-	def bonded(i, j):
-		bondLength = covalent_radii[atoms[i].number] + covalent_radii[atoms[j].number]
-		return atoms.get_distance(i, j, mic=True) < bondLength*tolerance
-			
-	N = len(atoms)
-	bonds = np.empty((N), dtype=object)
-	for i in range(N):
-		bonds[i] = [j for j in range(N) if bonded(i, j) and i != j]
-	atoms.set_array('bonds', bonds)
-
-
-class _Base:
-	def __init__(self, atoms):
-		self.atoms = list(atoms)
-		self.type = None
-	def __repr__(self):
-		return str(self.type)
-		
-class Bond(_Base):
-	@classmethod
-	def all_bonds(cls, atoms):
-		bondarr = atoms.get_array('bonds')
-		return [Bond((a.index, b.index)) for a,b in combinations(atoms, 2) if b.index in bondarr[a.index]]
-
-class Angle(_Base):
-	@classmethod
-	def all_angles(cls, atoms):
-		angles = []
-		for index, neigbors in enumerate(atoms.get_array('bonds')):
-			for pair in combinations(neigbors, 2):
-				angles.append(Angle((pair[0], index, pair[1])))
-		return angles
-	
-class Dihedral(_Base):
-	@classmethod
-	def all_dihedrals(cls, atoms):
-		dihedrals = []
-		bonds = atoms.get_array('bonds')
-		for j in range(len(atoms)):
-			for i, k in permutations(bonds[j], 2):
-				if k < j: continue
-				for l in bonds[k]:
-					if l == j: continue
-					dihedrals.append(Dihedral((i,l,k,l)))
-		return dihedrals
-	
-	
-class Improper:
-	def __init__(self, central_atom, other_atoms, class2=False):
-		self.central_atom = central_atom
-		self.other_atoms = list(other_atoms)
-		self.type = None
-		self.class2 = class2
-	@property
-	def atoms(self):
-		if self.class2:
-			return [other_atoms[0], self.central_atoms] + other_atoms[1:]
-		else:
-			return [self.central_atom] + other_atoms
-			
-	def __repr__(self):
-		return '%s, %s' % (str(self.central_atom), str(self.other_atoms))
-	@classmethod
-	def all_impropers(cls, atoms):
-		impropers = []
-		for index, neighbors in enumerate(atoms.get_array('bonds')):
-			for triplet in combinations(neighbors, 3):
-				impropers.append(Improper(index, set(triplet)))
-		return impropers
-			 
 
 class SequenceType:
 	def __init__(self, atom_types):
-		self.atom_types = sorted(atom_types)
+		if atom_types[0] < atom_types[-1]:
+			self.atom_types = list(atom_types)
+		else:
+			self.atom_types = list(reversed(atom_types))
 	def __eq__(self, other):
 		return self.atom_types == other.atom_types
 	def __hash__(self):
@@ -820,9 +766,12 @@ class SequenceType:
 		return repr(self.atom_types)
 
 class ImproperType:
-	def __init__(self, atom_types, class2=False):
-		if class2:
-			self.central =  atom_types[0]
+	def __init__(self, atom_types=None, central_type=None, other_types=None, class2=False):
+		if central_type and other_types:
+			self.central = central_type
+			self.others = sorted(other_types)
+		elif class2:
+			self.central = atom_types[0]
 			self.others = sorted(atom_types[1:])
 		else:
 			self.central =  atom_types[1]

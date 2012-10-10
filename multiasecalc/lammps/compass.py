@@ -22,7 +22,7 @@ class COMPASS(LAMMPSBase):
 		return [self.type_resolver.resolve(atom).type for atom in atoms]
 	
 	def set_charges(self, atoms, atom_types):
-		bonds = atoms.get_array('bonds')
+		bonds = atoms.info['bonds']
 		
 		for i in range(len(atoms)):
 			q = 0

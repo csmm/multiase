@@ -1,6 +1,5 @@
 import re
 from itertools import permutations
-from lammpsbase import detect_bonds
 
 class SyntaxError(Exception): pass
 class PrecedenceError(Exception): pass
@@ -122,7 +121,7 @@ class TemplateTree(Tree):
 		if (atom.symbol in self.elements) == self.invert: return False
 		
 		atoms = atom.atoms
-		bonded = [atoms[idx] for idx in atoms.get_array('bonds')[atom.index]]
+		bonded = [atoms[idx] for idx in atoms.info['bonds'][atom.index]]
 		if parent_atom:
 			bonded = [a for a in bonded if a.index != parent_atom.index]
 		
@@ -139,7 +138,7 @@ class TemplateTree(Tree):
 		
 	def test_ring(self, atom):
 		atoms = atom.atoms
-		bonds = atoms.get_array('bonds')
+		bonds = atoms.info['bonds']
 		conditions = self.ring_conditions
 		
 		def recursive_finder(chain, next_atom):
@@ -185,22 +184,14 @@ if __name__ == '__main__':
 	resolver = TypeResolver(f)
 	
 	from ase.data import s22
-	"""
-	dimer = s22.create_s22_system('Methane_dimer')
-	detect_bonds(dimer)
-	
-	for atom in dimer:
-		print atom.symbol, resolver.resolve(atom)
-	
-	import sys
-	sys.exit()
-	"""
+	from bonds import Bonds
+
 	for name in s22.s22:
 		dimer = s22.create_s22_system(name)
 		
 		print
 		print name
-		detect_bonds(dimer)
+		dimer.info['bonds'] = Bonds(dimer, autodetect=True)
 	
 		for atom in dimer:
 			print atom.symbol, resolver.resolve(atom)
