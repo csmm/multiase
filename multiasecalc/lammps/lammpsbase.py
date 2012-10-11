@@ -302,24 +302,27 @@ class LAMMPSBase:
 			for type in typeorder:
 				try:
 					yield params[type][title]
-				except TypeError:
-					if warn_missing: print 'No %s parameters for %s!' % (title, type)
+				except KeyError:
+					if warn_missing: print 'No %s for %s!' % (title, type)
 					yield empty_value
 		
-		def add_coeff_tables(params, objects, typeorder=None, warn_missing=False):
+		def add_coeff_tables(params, objects, typeorder=None, warn_missing=True):
 			if not params or not objects: return
-			if not typeorder:
+			if typeorder:
+				used_types = typeorder
+			else:
 				used_types = set(object['type'] for object in objects)
-				used_params = {}
-				for type in used_types:
-					try: used_params[type] = params[type]
-					except KeyError:
-						if warn_missing: print 'No parameters for %s!' % type
-				params = used_params
-				typeorder = params.keys()
+			used_params = {}
+			for type in used_types:
+				try: used_params[type] = params[type]
+				except KeyError:
+					if warn_missing: print 'No parameters for %s!' % type
+			
+			if not typeorder:
+				typeorder = used_params.keys()
 				
 			for title, ncols in get_tablenames(params):
-				table = coeff_table_generator(title, params, typeorder, [0]*ncols, warn_missing)
+				table = coeff_table_generator(title, used_params, typeorder, [0]*ncols, warn_missing)
 				tables.append((title, table))
 			return typeorder
 		
@@ -331,9 +334,9 @@ class LAMMPSBase:
 		add_coeff_tables(ff_data.atom, atom_types, atom_typeorder)
 		
 		bond_typeorder     = add_coeff_tables(ff_data.bond, bonds, warn_missing=True)
-		angle_typeorder    = add_coeff_tables(ff_data.angle, angles)
-		dihedral_typeorder = add_coeff_tables(ff_data.dihedral, dihedrals)
-		improper_typeorder = add_coeff_tables(ff_data.improper, impropers)
+		angle_typeorder    = add_coeff_tables(ff_data.angle, angles, warn_missing=True)
+		dihedral_typeorder = add_coeff_tables(ff_data.dihedral, dihedrals, warn_missing=True)
+		improper_typeorder = add_coeff_tables(ff_data.improper, impropers, warn_missing=True)
 		
 		# Atoms
 		self.set_charges(atoms, atom_types)
@@ -561,9 +564,8 @@ class LammpsProcess:
 		
 		if self.log == True:
 			# Save LAMMPS input and output for reference
-			dir = self.tmp_dir
-			self.inlog  = NamedTemporaryFile(prefix='in_'+filelabel, dir=dir, delete=False)
-			self.outlog = NamedTemporaryFile(prefix='log_'+filelabel, dir=dir, delete=False)
+			self.inlog  = NamedTemporaryFile(prefix='in_'+filelabel, dir=tmp_dir, delete=False)
+			self.outlog = NamedTemporaryFile(prefix='log_'+filelabel, dir=tmp_dir, delete=False)
 	
 	def start(self, tmp_dir, lammps_command=None, filelabel=''):
 		if self.running(): self.terminate()
@@ -622,8 +624,7 @@ class LammpsProcess:
 		line = f.readline()
 		while line and line.strip() != CALCULATION_END_MARK:
 			if 'ERROR:' in line:
-				raise RuntimeError('LAMMPS execution in %s failed. LAMMPS %s' 
-						% (self.tmp_dir,line))
+				raise RuntimeError('LAMMPS execution failed. LAMMPS %s' % line)
 			if all(s[0].isupper() for s in line.split()[:5]):
 				# Seems to be the start of thermo output
 				keys = translate_keys(line.split())

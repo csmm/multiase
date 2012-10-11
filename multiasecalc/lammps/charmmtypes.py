@@ -134,7 +134,6 @@ type: CG2D1
 
 type: CG2D2
 	! alkene; H2C=
-	! Use also for methane...
 	template: [>C (H)(H)(*)]
 
 

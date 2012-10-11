@@ -4,7 +4,7 @@ import typing, charmmtypes
 
 class CHARMM(LAMMPSBase):
 	
-	def __init__(self, label='charmm', ff_file_path=None, pair_cutoff=10.0, **kwargs):
+	def __init__(self, ff_file_path, label='charmm', pair_cutoff=10.0, **kwargs):
 		LAMMPSBase.__init__(self, label, **kwargs)
 		
 		self.parameters.units          = 'real'

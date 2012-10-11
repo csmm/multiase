@@ -4,7 +4,7 @@ import typing, compasstypes
 
 class COMPASS(LAMMPSBase):
 	
-	def __init__(self, label='compass', ff_file_path='compass.frc', pair_cutoff=10.0, **kwargs):
+	def __init__(self, ff_file_path, label='compass', pair_cutoff=10.0, **kwargs):
 		LAMMPSBase.__init__(self, label, **kwargs)
 		
 		self.parameters.units          = 'real'
@@ -19,6 +19,9 @@ class COMPASS(LAMMPSBase):
 		self.type_resolver = typing.TypeResolver(compasstypes.data)
 	
 	def atom_types(self, atoms):
+		templates = [self.type_resolver.resolve(atom) for atom in atoms]
+		atoms.info['atom_types'] = [t.type for t in templates]
+		atoms.info['descriptions'] = [t.docstring for t in templates]
 		return [self.type_resolver.resolve(atom).type for atom in atoms]
 	
 	def set_charges(self, atoms, atom_types):

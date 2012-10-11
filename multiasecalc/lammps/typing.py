@@ -36,7 +36,11 @@ class TypeResolver:
 		except StopIteration:
 			raise PrecedenceError('%s:\nCould not resolve precedence among types %s' % (atom, matches))
 			
-		
+	def resolve_atoms(self, atoms):
+		templates = [self.resolve(atom) for atom in atoms]
+		atoms.info['atom_types'] = [t.type for t in templates]
+		atoms.info['descriptions'] = [t.docstring for t in templates]
+
 
 class Template:
 	def __init__(self, type, template, docstring=None):
@@ -122,6 +126,7 @@ class TemplateTree(Tree):
 		
 		atoms = atom.atoms
 		bonded = [atoms[idx] for idx in atoms.info['bonds'][atom.index]]
+		
 		if parent_atom:
 			bonded = [a for a in bonded if a.index != parent_atom.index]
 		

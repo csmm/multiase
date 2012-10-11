@@ -3,14 +3,14 @@ from itertools import combinations, permutations
 import numpy as np
 
 class Bonds:
-	def __init__(self, atoms, autodetect=False, pairs=None):
+	def __init__(self, atoms, pairs=None, autodetect=False):
 		self.len_atoms = len(atoms)
 		if autodetect:
 			self.detect(atoms)
 		elif pairs:
 			self.pairs = np.array(pairs)
 		else:
-			self.pairs = np.array(shape=(0,2))
+			self.pairs = np.zeros((0,2), dtype=int)
 			
 	def detect(self, atoms):
 		tolerance = 1.1
@@ -35,6 +35,15 @@ class Bonds:
 			
 	def __len__(self):
 		return len(self.pairs)
+		
+	def add(self, i, j):
+		self.pairs = np.append(self.pairs, np.array((i,j), ndmin=2), axis=0)
+		
+	def atoms_extending(self, new_atoms):
+		if 'bonds' in new_atoms.info:
+			new_pairs = new_atoms.info['bonds'].pairs + self.len_atoms
+			self.pairs = np.append(self.pairs, new_pairs, axis=0)
+		self.len_atoms += len(new_atoms)
 	
 	def find_angles(self):
 		angles = []
