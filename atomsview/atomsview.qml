@@ -9,66 +9,108 @@ import QtQuick 1.1
      property real viewWidth: width * viewscale
      
 	function elementColor(element) {
-		var colors = {'H': "white", 'C': "#442211", 'O': "#880000", 'N': "#0000AA"}
+		var colors = {'H': "white", 'C': "#442211", 'O': "#880000", 'N': "#0000BB"}
 		return colors[element]
 	}
 	
 	function elementSize(element) {
-		var sizes = {'H': 30, 'C': 45, 'O': 40, 'N':40}
+		var sizes = {'H': .3, 'C': .45, 'O': .40, 'N': .40}
 		return sizes[element]
 	}
 	
 	
 	Repeater {
-		 model: atomsModel
-		 
-		Rectangle {
+		model: atomsModel
+		
+		Item {
 			id: atom
-			x: (atomx/viewWidth + .5) * container.width - radius
-			y: (atomy/viewHeight + .5) * container.height - radius
+			x: (atomx/viewWidth + .5) * container.width
+			y: (atomy/viewHeight + .5) * container.height
 			z: atomz + 100
-			width: radius*2
-			height: radius*2
-			//radius: covalentRadius/viewscale
-			radius: elementSize(element)
-			color: elementColor(element)
-			border.color: "black"
-			border.width: 4
-			clip: true
-			
+		
 			Rectangle {
-				id: elementBackground
-				visible: type != false
-				anchors.centerIn: parent
-				color: "#22FFFFFF"
-				width: elementName.width + 20
-				height: elementName.height + 10
-				radius: 15
-					
-				Text {
-					id: elementName
-					text: type
-					anchors.centerIn: parent
-					font.pointSize: 10
-				}
-			}
-			
-			MouseArea {
-				anchors.fill: parent
-				enabled: description || type
+				id: circle
+				x: -radius
+				y: -radius
+				width: radius*2
+				height: radius*2
+				//radius: covalentRadius/viewscale
+				radius: elementSize(element)/viewscale
+				color: elementColor(element)
+				border.color: "black"
+				border.width: 4
+				clip: true
 				
-				onClicked: {
-					var dx = mouse.x - (x+radius);
-					var dy = mouse.y - (y+radius);
-					if (dx^2 + dy^2 < radius^2) {
-						tooltipText.text = (description)? description : "No description";
-						toolTip.visible = true;
-						toolTip.x = atom.x;
-						toolTip.y = atom.y;
+				Rectangle {
+					id: elementBackground
+					visible: type != false
+					anchors.centerIn: parent
+					color: "#33FFFFFF"
+					width: elementName.width + 20
+					height: elementName.height + 10
+					radius: 15
+						
+					Text {
+						id: elementName
+						text: type
+						anchors.centerIn: parent
+						font.pointSize: 10
 					}
 				}
+				
+				MouseArea {
+					anchors.fill: parent
+					enabled: description || type
+					
+					onClicked: {
+						var rad = circle.radius;
+						var dx = mouse.x - rad;
+						var dy = mouse.y - rad;
+						if (dx*dx + dy*dy < rad*rad) {
+							tooltipText.text = (description)? description : "No description";
+							toolTip.visible = true;
+							toolTip.x = atom.x;
+							toolTip.y = atom.y;
+						}
+					}
+				}
+				
+			}
+		}
+	}
+	
+	
+	Repeater {
+		model: bondsModel
+		
+		Item {
+			id: bond
+			x: ((x1+x2)/2/viewWidth + .5) * container.width
+			y: ((y1+y2)/2/viewHeight + .5) * container.height
+			z: (z1+z2)/2 + 100
+			rotation: Math.atan((y2-y1)/(x2-x1)) *180 / Math.PI
+			
+			property real length2d: hypotenuse(x2-x1, y2-y1)
+			
+			property real len1: beamHalfLength(element1)
+			property real len2: beamHalfLength(element2)
+			
+			function hypotenuse(a, b) {
+				return  Math.sqrt(a*a + b*b)
 			}
 			
+			function beamHalfLength(element) {
+				return length2d * (.5 - elementSize(element)/hypotenuse(length2d, z2-z1)) / viewscale
+			}
+			
+			Rectangle {
+				x: -(x2 > x1? len1 : len2)
+				y: -height / 2
+				width: len1+len2
+				height: 8
+				border.color: "black"
+				color: "darkgray"
+			}
 		}
 	}
 	

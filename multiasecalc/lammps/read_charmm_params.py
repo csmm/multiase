@@ -50,7 +50,7 @@ def read(infile):
 	for fields in parser(infile):
 		if len(fields) != 7: continue
 		
-		type = ImproperType(fields[0], fields[1:4])
+		type = ImproperType(central_type=fields[0], other_types=fields[1:4])
 		parameters = [float(f) for f in fields[4:7:2]]
 		result.improper[type] = {'Improper Coeffs': parameters}
 	

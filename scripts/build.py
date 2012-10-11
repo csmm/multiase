@@ -279,9 +279,9 @@ if __name__ == '__main__':
 	from multiasecalc.utils import get_datafile
 	from atomsview import atomsview
 	from multiasecalc.lammps import compasstypes, charmmtypes
-	atomsview.view(atoms, charmmtypes.data)
+	#atomsview.view(atoms, charmmtypes.data)
 	#atoms.calc = COMPASS(ff_file_path = get_datafile('compass.frc'), debug=True)
-	atoms.calc = CHARMM(get_datafile('par_all36_cgenff.prm'))
+	atoms.calc = CHARMM(get_datafile('par_all36_cgenff.prm'), debug=True)
 	min = dynamics.LAMMPSOptimizer(atoms)
 	min.run()
 	from ase.visualize import view

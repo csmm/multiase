@@ -7,17 +7,32 @@ import os
 import numpy as np
 from ase.data import covalent_radii, vdw_radii
 from multiasecalc.lammps.typing import TypeResolver
-from multiasecalc.lammps import charmmtypes
 from multiasecalc.lammps.bonds import Bonds
+from multiasecalc.lammps import charmmtypes, compasstypes
+from multiasecalc import utils
+
+qml_sourcepath = os.path.join(utils.csmm_config['CSMM_INSTALL_DIR'], 'atomsview/atomsview.qml')
+
+def view(atoms, typedata=None):
+	if typedata:
+		resolver = TypeResolver(typedata)
+		resolver.resolve_atoms(atoms)
+	app = QApplication([])
+	view = AtomsView(atoms)
+	view.show()
+	app.exec_()
 
 class AtomsView(QDeclarativeView):
 	def __init__(self, atoms):
 		QWidget.__init__(self)
 		self.view_state = ViewState(atoms)
+		self.bonds_model = BondsModel(self.view_state)
+		self.atoms_model = AtomsModel(self.view_state)
 		
 		self.rootContext().setContextProperty('viewState', self.view_state)
-		self.rootContext().setContextProperty('atomsModel', AtomsModel(self.view_state))
-		self.setSource(QUrl(os.path.dirname(__file__)+'atomsview.qml'))
+		self.rootContext().setContextProperty('atomsModel', self.atoms_model)
+		self.rootContext().setContextProperty('bondsModel', self.bonds_model)
+		self.setSource(QUrl(qml_sourcepath))
 		self.setResizeMode(QDeclarativeView.SizeRootObjectToView)
 		
 		self.setWindowTitle('AtomsView')
@@ -41,7 +56,7 @@ class ViewState(QObject):
 		self.updated.emit()
 	
 	def centerAtoms(self):
-		self.translation = np.mean(self.atoms.positions, axis=0)
+		self.translation = -np.mean(self.atoms.positions, axis=0)
 		self.update_coordinates()
 		
 	@pyqtSlot(float, float)
@@ -77,7 +92,7 @@ class AtomsModel(QAbstractListModel):
 			self.typerole: 'type',
 			self.descriptionrole: 'description'
 			}
-		self.setRoleNames(role_names);
+		self.setRoleNames(role_names)
 		
 	def rowCount(self, index = QModelIndex()):
 		return len(self.view_state.atoms)
@@ -100,18 +115,70 @@ class AtomsModel(QAbstractListModel):
 	@pyqtSlot()
 	def changed(self):
 		self.dataChanged.emit(self.index(0), self.index(self.rowCount()-1))
+
 		
+class BondsModel(QAbstractListModel):
+	
+	x1role, y1role, z1role, x2role, y2role, z2role, element1role, element2role = range(Qt.UserRole+1, Qt.UserRole+1+8)
+	
+	def __init__(self, view_state):
+		QAbstractListModel.__init__(self)
+		self.view_state = view_state
+		self.pairs = list(view_state.atoms.info['bonds'])
+		view_state.updated.connect(self.changed)
+		role_names = {
+			self.x1role: 'x1',
+			self.y1role: 'y1',
+			self.z1role: 'z1',
+			self.x2role: 'x2',
+			self.y2role: 'y2',
+			self.z2role: 'z2',
+			self.element1role: 'element1',
+			self.element2role: 'element2',
+			}
+		self.setRoleNames(role_names)
+	
+	def rowCount(self, index = QModelIndex()):
+		return len(self.view_state.atoms.info['bonds'])
+	
+	def data(self, index, role = Qt.DisplayRole):
+		atoms = self.view_state.atoms
+		row = index.row()
+		i, j = self.pairs[row]
+		if role in (self.x1role, self.y1role, self.z1role):
+			return float(self.view_state.atom_coordinates[i, role - self.x1role])
+		if role in (self.x2role, self.y2role, self.z2role):
+			return float(self.view_state.atom_coordinates[j, role - self.x2role])
+		else:
+			return {
+				self.element1role: atoms.get_chemical_symbols()[i],
+				self.element2role: atoms.get_chemical_symbols()[j],
+			}[role]
+	
+	@pyqtSlot()
+	def changed(self):
+		self.dataChanged.emit(self.index(0), self.index(self.rowCount()-1))
 		
 if __name__ == '__main__':
+	import sys
 	from ase.data import s22
-	atoms = s22.create_s22_system('Adenine-thymine_complex_stack')
+	
+	try: 
+		atoms = s22.create_s22_system(sys.argv[1])
+	except:
+		atoms = s22.create_s22_system('Adenine-thymine_complex_stack')
+	
+	try:
+		if sys.argv[2] == 'charmm':
+			typedata = charmmtypes.data
+		if sys.argv[2] == 'compass':
+			typedata = compasstypes.data
+	except:
+		typedata = charmmtypes.data
+	
 	atoms.info['bonds'] = Bonds(atoms, autodetect=True)
-	type_resolver = TypeResolver(charmmtypes.data)
+	type_resolver = TypeResolver(typedata)
 	matches = [type_resolver.resolve(atom) for atom in atoms]
 	atoms.info['atom_types'] = [m.type for m in matches]
 	atoms.info['descriptions'] = [m.docstring for m in matches]
-	
-	app = QApplication([])
-	view = AtomsView(atoms)
-	view.show()
-	app.exec_()
+	view(atoms)

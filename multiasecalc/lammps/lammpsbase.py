@@ -322,7 +322,7 @@ class LAMMPSBase:
 				typeorder = used_params.keys()
 				
 			for title, ncols in get_tablenames(params):
-				table = coeff_table_generator(title, used_params, typeorder, [0]*ncols, warn_missing)
+				table = list(coeff_table_generator(title, used_params, typeorder, [0]*ncols, warn_missing))
 				tables.append((title, table))
 			return typeorder
 		
@@ -486,7 +486,9 @@ class LAMMPSBase:
 		f.write('\n\n')
 		
 		for title, table in data.tables:
-			#if len(table) == 0: return
+			if len(table) == 0: 
+				print 'empty table'
+				continue
 			f.write('%s \n\n' % title)
 			for index, row in enumerate(table, 1):
 				f.write(('%d'+' %s'*len(row) +'\n') % ((index,) + tuple(row)))
