@@ -17,7 +17,8 @@ class ClayFF(LAMMPSBase):
 		self.type_resolver = typing.TypeResolver(clayff_types)
 		
 	def atom_types(self, atoms):
-		return [self.type_resolver.resolve(atom).type for atom in atoms]
+		self.type_resolver.resolve_atoms(atoms)
+		return atoms.info['atom_types']
 	
 	def set_charges(self, atoms, atom_types):
 		atoms.set_charges([charges[tp] for tp in atom_types])

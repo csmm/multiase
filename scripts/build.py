@@ -9,7 +9,7 @@ import multiprocessing
 from multiasecalc.lammps.bonds import Bonds
 
 # Constants
-cc_vector = array((1.54, 0, 0)) #nm
+cc_vector = array((1.54, 0, 0))
 c_angle = arccos(-1/3)
 
 ch_length = 1.094
@@ -81,7 +81,7 @@ class amorphousBuilder(object):
 	
 	def __init__(self, boxDimensions):
 		self.box = array(boxDimensions)
-		self.atoms = []
+		self.atoms = None
 		self.temperature = 1000
 
 	def createCH3(self):
@@ -157,7 +157,7 @@ class amorphousBuilder(object):
 		# translation - vector
 		# Randomize initial values
 		tx, ty, tz = random.uniform(0, 2*pi, size=3)
-		rotation = dot(xRotation(tx), dot(yRotation(ty), zRotation(tz)))
+		rotation = dot(xRotation(tx), dot(yRotation(ty), zRotation(tz)))		
 		translation = array([random.uniform(0, dim) for dim in self.box])
 		def translateOneStep():
 			return (translation + dot(rotation, cc_vector))
@@ -167,9 +167,8 @@ class amorphousBuilder(object):
 		rotateAtoms(atoms, zRotation(pi))
 		rotateAtoms(atoms, rotation)
 		atoms.translate(translation)
-		self.atoms = atoms
-		self.atoms.cell = self.box
-		self.atoms.pbc = True
+		atoms.cell = self.box
+		atoms.pbc = True
 		lastCarbon = 0
 		
 		processes = multiprocessing.Pool(processes=3)
@@ -230,6 +229,9 @@ class amorphousBuilder(object):
 		addAtoms(atoms, endAtoms)
 		atoms.info['bonds'].add(lastCarbon, newCarbon)
 		
+		if self.atoms == None: self.atoms = atoms
+		else: addAtoms(self.atoms, atoms)
+		
 
 def plotEnergies(energyLists):
 	import pylab
@@ -247,7 +249,8 @@ def createPVA(boxSize, nchains=1):
 	angstrom = 10
 	
 	avogadro = 6.0221e23
-	density = 1.25 *avogadro/46/1e24
+	#density = 1.25 *avogadro/46/1e24
+	density = 1.2 *avogadro/46/1e24
 	N = int(density*boxSize**3 / nchains)
 	#N = 1
 	print N, 'monomers'
@@ -261,6 +264,7 @@ def createPVA(boxSize, nchains=1):
 
 	confEnergyLists = []
 	for generator in generators: confEnergyLists.append([])
+	
 	
 	while len(generators) > 0:
 		for generator, confEnergyList in zip(generators, confEnergyLists):
@@ -279,7 +283,7 @@ if __name__ == '__main__':
 	from multiasecalc.utils import get_datafile
 	from atomsview import atomsview
 	from multiasecalc.lammps import compasstypes, charmmtypes
-	#atomsview.view(atoms, charmmtypes.data)
+	atomsview.view(atoms, charmmtypes.data)
 	#atoms.calc = COMPASS(ff_file_path = get_datafile('compass.frc'), debug=True)
 	atoms.calc = CHARMM(get_datafile('par_all36_cgenff.prm'), debug=True)
 	min = dynamics.LAMMPSOptimizer(atoms)

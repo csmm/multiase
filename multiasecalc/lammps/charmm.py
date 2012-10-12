@@ -20,5 +20,5 @@ class CHARMM(LAMMPSBase):
 		self.type_resolver = typing.TypeResolver(charmmtypes.data)
 	
 	def atom_types(self, atoms):
-		return [self.type_resolver.resolve(atom).type for atom in atoms]
-		
+		self.type_resolver.resolve_atoms(atoms)
+		return atoms.info['atom_types']

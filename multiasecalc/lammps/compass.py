@@ -16,13 +16,12 @@ class COMPASS(LAMMPSBase):
 		self.parameters.special_bonds  =  'lj/coul 0.0 0.0 1.0 dihedral yes'
 		
 		self.ff_data, self.bond_increments = read_compass_params.read(open(ff_file_path))
+		#self.ff_data.dihedral = {}
 		self.type_resolver = typing.TypeResolver(compasstypes.data)
 	
 	def atom_types(self, atoms):
-		templates = [self.type_resolver.resolve(atom) for atom in atoms]
-		atoms.info['atom_types'] = [t.type for t in templates]
-		atoms.info['descriptions'] = [t.docstring for t in templates]
-		return [self.type_resolver.resolve(atom).type for atom in atoms]
+		self.type_resolver.resolve_atoms(atoms)
+		return atoms.info['atom_types']
 	
 	def set_charges(self, atoms, atom_types):
 		bonds = atoms.info['bonds']

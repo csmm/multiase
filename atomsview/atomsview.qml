@@ -9,12 +9,12 @@ import QtQuick 1.1
      property real viewWidth: width * viewscale
      
 	function elementColor(element) {
-		var colors = {'H': "white", 'C': "#442211", 'O': "#880000", 'N': "#0000BB"}
+		var colors = {'H': "white", 'C': "#442211", 'O': "#880000", 'N': "#0000BB", 'Al': "darkgray", 'Si': "turquoise"}
 		return colors[element]
 	}
 	
 	function elementSize(element) {
-		var sizes = {'H': .3, 'C': .45, 'O': .40, 'N': .40}
+		var sizes = {'H': .3, 'C': .45, 'O': .40, 'N': .40, 'Al': .60, 'Si': .45}
 		return sizes[element]
 	}
 	
@@ -46,7 +46,7 @@ import QtQuick 1.1
 					visible: type != false
 					anchors.centerIn: parent
 					color: "#33FFFFFF"
-					width: elementName.width + 20
+					width: elementName.width + 15
 					height: elementName.height + 10
 					radius: 15
 						
@@ -89,8 +89,10 @@ import QtQuick 1.1
 			y: ((y1+y2)/2/viewHeight + .5) * container.height
 			z: (z1+z2)/2 + 100
 			rotation: Math.atan((y2-y1)/(x2-x1)) *180 / Math.PI
+			visible: length3d < 2
 			
 			property real length2d: hypotenuse(x2-x1, y2-y1)
+			property real length3d: hypotenuse(length2d, z2-z1)
 			
 			property real len1: beamHalfLength(element1)
 			property real len2: beamHalfLength(element2)
@@ -100,7 +102,7 @@ import QtQuick 1.1
 			}
 			
 			function beamHalfLength(element) {
-				return length2d * (.5 - elementSize(element)/hypotenuse(length2d, z2-z1)) / viewscale
+				return length2d * (.5 - elementSize(element)/length3d) / viewscale
 			}
 			
 			Rectangle {

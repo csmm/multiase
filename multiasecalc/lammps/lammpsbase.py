@@ -322,8 +322,8 @@ class LAMMPSBase:
 				typeorder = used_params.keys()
 				
 			for title, ncols in get_tablenames(params):
-				table = list(coeff_table_generator(title, used_params, typeorder, [0]*ncols, warn_missing))
-				tables.append((title, table))
+				table = coeff_table_generator(title, used_params, typeorder, [0]*ncols, warn_missing)
+				tables.append((title, list(table)))
 			return typeorder
 		
 		# Add masses to ff_data
@@ -333,10 +333,10 @@ class LAMMPSBase:
 			
 		add_coeff_tables(ff_data.atom, atom_types, atom_typeorder)
 		
-		bond_typeorder     = add_coeff_tables(ff_data.bond, bonds, warn_missing=True)
-		angle_typeorder    = add_coeff_tables(ff_data.angle, angles, warn_missing=True)
-		dihedral_typeorder = add_coeff_tables(ff_data.dihedral, dihedrals, warn_missing=True)
-		improper_typeorder = add_coeff_tables(ff_data.improper, impropers, warn_missing=True)
+		bond_typeorder     = add_coeff_tables(ff_data.bond, bonds, warn_missing=self.debug)
+		angle_typeorder    = add_coeff_tables(ff_data.angle, angles, warn_missing=self.debug)
+		dihedral_typeorder = add_coeff_tables(ff_data.dihedral, dihedrals, warn_missing=self.debug)
+		improper_typeorder = add_coeff_tables(ff_data.improper, impropers, warn_missing=self.debug)
 		
 		# Atoms
 		self.set_charges(atoms, atom_types)
@@ -360,7 +360,6 @@ class LAMMPSBase:
 			used_objects = []
 			for obj in objects:
 				if obj['type'] not in typeorder:
-					objects.remove(obj)
 					continue
 				typeid = typeorder.index(obj['type'])+1
 				atoms = [idx+1 for idx in obj['indices']]
@@ -486,9 +485,7 @@ class LAMMPSBase:
 		f.write('\n\n')
 		
 		for title, table in data.tables:
-			if len(table) == 0: 
-				print 'empty table'
-				continue
+			if len(table) == 0:  continue
 			f.write('%s \n\n' % title)
 			for index, row in enumerate(table, 1):
 				f.write(('%d'+' %s'*len(row) +'\n') % ((index,) + tuple(row)))
@@ -539,6 +536,7 @@ class LammpsProcess:
 		self.log = log
 		self.output_hack = False  # see invoke_lammps()
 		
+		
 		self.thermo_output = []
 		
 	def __del__(self):
@@ -560,14 +558,16 @@ class LammpsProcess:
 			# does not work. Here's a workaround.
 			lammps_cmd_line += ['-log', '/dev/stdout']
 			self.output_hack=True
-		
-		return Popen(lammps_cmd_line,
-							cwd=tmp_dir, stdin=PIPE, stdout=PIPE, stderr=sys.stderr)
+		else:
+			lammps_cmd_line += ['-log', '/dev/null']
 		
 		if self.log == True:
 			# Save LAMMPS input and output for reference
 			self.inlog  = NamedTemporaryFile(prefix='in_'+filelabel, dir=tmp_dir, delete=False)
 			self.outlog = NamedTemporaryFile(prefix='log_'+filelabel, dir=tmp_dir, delete=False)
+			
+		return Popen(lammps_cmd_line,
+							cwd=tmp_dir, stdin=PIPE, stdout=PIPE, stderr=sys.stderr)
 	
 	def start(self, tmp_dir, lammps_command=None, filelabel=''):
 		if self.running(): self.terminate()
@@ -596,6 +596,7 @@ class LammpsProcess:
 	def flush(self):
 		self.proc.stdin.flush()
 		if self.output_hack: self.write('log /dev/stdout\n')
+		else: self.write('log /dev/null\n')
 		
 	def close_logs(self):
 		if self.inlog: self.inlog.close()
@@ -625,7 +626,7 @@ class LammpsProcess:
 		thermo_output = []
 		line = f.readline()
 		while line and line.strip() != CALCULATION_END_MARK:
-			if 'ERROR:' in line:
+			if 'ERROR' in line:
 				raise RuntimeError('LAMMPS execution failed. LAMMPS %s' % line)
 			if all(s[0].isupper() for s in line.split()[:5]):
 				# Seems to be the start of thermo output
