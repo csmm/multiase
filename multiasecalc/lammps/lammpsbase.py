@@ -534,7 +534,6 @@ class LammpsProcess:
 		self.outlog = None
 		self.proc = None
 		self.log = log
-		self.output_hack = False  # see invoke_lammps()
 		
 		
 		self.thermo_output = []
@@ -553,13 +552,7 @@ class LammpsProcess:
 		# Make sure we execute using the absolute path              
 		lammps_cmd_line[0] = os.path.abspath(lammps_cmd_line[0])
 		
-		if not 'mpirun' in lammps_cmd_line[0]:
-			# If one doesn't execute LAMMPS with 'mpirun', the normal output to stdout
-			# does not work. Here's a workaround.
-			lammps_cmd_line += ['-log', '/dev/stdout']
-			self.output_hack=True
-		else:
-			lammps_cmd_line += ['-log', '/dev/null']
+		lammps_cmd_line += ['-log', '/dev/null']
 		
 		if self.log == True:
 			# Save LAMMPS input and output for reference
@@ -595,8 +588,7 @@ class LammpsProcess:
 		
 	def flush(self):
 		self.proc.stdin.flush()
-		if self.output_hack: self.write('log /dev/stdout\n')
-		else: self.write('log /dev/null\n')
+		self.write('log /dev/null\n')
 		
 	def close_logs(self):
 		if self.inlog: self.inlog.close()
@@ -628,21 +620,23 @@ class LammpsProcess:
 		while line and line.strip() != CALCULATION_END_MARK:
 			if 'ERROR' in line:
 				raise RuntimeError('LAMMPS execution failed. LAMMPS %s' % line)
-			if all(s[0].isupper() for s in line.split()[:5]):
+			
+			words = line.split()
+			if words and all(w[0].isupper() for w in words):
 				# Seems to be the start of thermo output
-				keys = translate_keys(line.split())
+				keys = translate_keys(words)
 				while True:
 					line = f.readline()
 					fields = line.split()
 					if len(fields) != len(keys): break
 					try:
 						fields = map(float, fields) # convert to float
-					except ValueError:                       
+						thermo_output.append(dict(zip(keys, fields)))
+					except ValueError:
 						break   # Wasn't a thermo line after all
-					thermo_output.append(dict(zip(keys, fields)))
-					
 			else:
 				line = f.readline()
+
 		self.thermo_output = thermo_output
 		if len(thermo_output) == 0:
 			raise RuntimeError('No thermo output from LAMMPS!')
