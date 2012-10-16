@@ -14,10 +14,8 @@ def fileIterator(infile):
 		(.+?)\n\n
 		""", re.VERBOSE | re.DOTALL)
 
-	title = yield
 	for match in frcTableExp.finditer(infile.read()):
-		if match.group(1) == title:
-			title = yield match.group(2)
+		yield match.groups()
 
 
 
@@ -31,10 +29,11 @@ def read(infile):
 	theta0 = {}
 
 	it = fileIterator(infile)
-	it.next()
+	
+	tables = dict(it)
 	
 	# **** Equivalence ****
-	table = it.send('equivalence')
+	table = tables['equivalence']
 	equivalence = np.array([row.split()[2:] for row in table.split('\n')])
 	
 	def formalTypes(actualTypes, category):
@@ -58,14 +57,14 @@ def read(infile):
 				yield types, values
 	
 	# **** Bond coeffs ****
-	table = it.send('quartic_bond')
+	table = tables['quartic_bond']
 	for atomTypes, values in iterateTable(table, 'Bond'):
 		type = SequenceType(atomTypes)
 		ff_data.bond[type] = {'Bond Coeffs': values}
 		R0[type] = values[0]
 	
 	# **** Angle coeffs ****
-	table = it.send('quartic_angle')
+	table = tables['quartic_angle']
 	ff_data.bond['Angle Coeffs'] = {}
 	for atomTypes, values in iterateTable(table, 'Angle'):
 		type = SequenceType(atomTypes)
@@ -73,7 +72,7 @@ def read(infile):
 		theta0[type] = values[0]
 	 
 	# **** Bond/bond ****
-	table = it.send('bond-bond')
+	table = tables['bond-bond']
 	for types, values in iterateTable(table, 'Angle'):
 		bond1 = SequenceType(types[:2])
 		bond2 = SequenceType(types[1:])
@@ -81,7 +80,7 @@ def read(infile):
 		ff_data.add('angle', SequenceType(types), 'BondBond Coeffs', [values[0], R0[bond1], R0[bond2]])
 	
 	# **** Bond/bond 1-3 ***
-	table = it.send('bond-bond_1_3')
+	table = tables['bond-bond_1_3']
 	for types, values in iterateTable(table, 'Torsion'):
 		bond1 = SequenceType(types[:2])
 		bond2 = SequenceType(types[2:])
@@ -89,7 +88,7 @@ def read(infile):
 		ff_data.add('dihedral', SequenceType(types), 'BondBond13 Coeffs', [values[0], R0[bond1], R0[bond2]])
 		
 	# **** Bond/angle ****
-	table = it.send('bond-angle')
+	table = tables['bond-angle']
 	for types, values in iterateTable(table, 'Angle'):
 		bond1 = SequenceType(types[:2])
 		bond2 = SequenceType(types[1:])
@@ -99,12 +98,12 @@ def read(infile):
 		ff_data.add('angle', SequenceType(types), 'BondAngle Coeffs', [ values[0], K2, R0[bond1], R0[bond2]])
 
 	# **** Torsion coeffs ****
-	table = it.send('torsion_3')
+	table = tables['torsion_3']
 	for types, values in iterateTable(table, 'Torsion'):
 		ff_data.add('dihedral', SequenceType(types), 'Dihedral Coeffs', values)
 
 	# **** End bond/torsion ***
-	table = it.send('end_bond-torsion_3')
+	table = tables['end_bond-torsion_3']
 	for types, values in iterateTable(table, 'Torsion'):
 		bond1 = SequenceType(types[:2])
 		bond2 = SequenceType(types[2:])
@@ -115,14 +114,14 @@ def read(infile):
 		ff_data.add('dihedral', SequenceType(types), 'EndBondTorsion Coeffs',  B + C + [R0[bond1], R0[bond2]])
 	
 	# **** Middle bond/torsion ****
-	table = it.send('middle_bond-torsion_3')
+	table = tables['middle_bond-torsion_3']
 	for types, values in iterateTable(table, 'Torsion'):
 		bond2 = SequenceType(types[1:3])
 		if not bond2 in R0: continue
 		ff_data.add('dihedral', SequenceType(types), 'MiddleBondTorsion Coeffs', values + [R0[bond2]])
 		
 	# **** Angle/torsion ****
-	table = it.send('angle-torsion_3')
+	table = tables['angle-torsion_3']
 	for types, values in iterateTable(table, 'Torsion'):
 		angle1 = SequenceType(types[:3])
 		angle2 = SequenceType(types[1:])
@@ -134,13 +133,13 @@ def read(infile):
 		
 	
 	# **** Wilson out of plane ****
-	table = it.send('wilson_out_of_plane')
+	table = tables['wilson_out_of_plane']
 	for types, values in iterateTable(table, 'OOP'):
 		ff_data.add('improper', ImproperType(types, class2=True), 'Improper Coeffs', values)
 
 		
 	# ****** angle/angle ******
-	table = it.send('angle-angle')
+	table = tables['angle-angle']
 	aaCoeffs = {}
 	aa_dihedrals = set()
 	for types, values in iterateTable(table, 'OOP'):
@@ -176,7 +175,7 @@ def read(infile):
 		
 
 	# ****** angle/angle/torsion ******
-	table = it.send('angle-angle-torsion_1')
+	table = tables['angle-angle-torsion_1']
 	for types, values in iterateTable(table, 'Torsion'):
 		angle1 = SequenceType(types[:3])
 		angle2 = SequenceType(types[1:])
@@ -185,13 +184,13 @@ def read(infile):
 		ff_data.add('dihedral', SequenceType(types), 'AngleAngleTorsion Coeffs', v)
 
 	# ****** nonbonded ******
-	table = it.send('nonbond(9-6)')
+	table = tables['nonbond(9-6)']
 	for types, values in iterateTable(table, 'NonB'):
 		ff_data.add('atom', types[0], 'Pair Coeffs', values[::-1])
 		
 	# ****** bond increments ******
 	bond_increments = {}
-	table = it.send('bond_increments')
+	table = tables['bond_increments']
 	for types, values in iterateTable(table, 'Bond'):
 		bond_increments[types] = values
 		

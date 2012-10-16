@@ -167,9 +167,14 @@ class amorphousBuilder(object):
 		rotateAtoms(atoms, zRotation(pi))
 		rotateAtoms(atoms, rotation)
 		atoms.translate(translation)
-		atoms.cell = self.box
-		atoms.pbc = True
-		lastCarbon = 0
+		if self.atoms:
+			lastCarbon = len(self.atoms)
+			addAtoms(self.atoms, atoms)
+		else:
+			atoms.cell = self.box
+			atoms.pbc = True
+			self.atoms = atoms
+			lastCarbon = 0
 		
 		processes = multiprocessing.Pool(processes=3)
 		
@@ -198,7 +203,7 @@ class amorphousBuilder(object):
 				rotateAtoms(testAtoms, rot)
 				testAtoms.translate(translation)
 				#conformationEnergies.append(pairEnergy(atoms, testAtoms, self.box))
-				energyResults.append(processes.apply_async(pairEnergy, (atoms, testAtoms, self.box)))
+				energyResults.append(processes.apply_async(pairEnergy, (self.atoms, testAtoms, self.box)))
 			
 			conformationEnergies = [result.get() for result in energyResults]
 			conformation = self.chooseConformation(conformationEnergies)
@@ -206,9 +211,9 @@ class amorphousBuilder(object):
 			rotateAtoms(newAtoms, rotation)
 			newAtoms.translate(translation)
 			
-			newCarbon = len(atoms)
-			addAtoms(atoms, newAtoms)
-			atoms.info['bonds'].add(lastCarbon, newCarbon)
+			newCarbon = len(self.atoms)
+			addAtoms(self.atoms, newAtoms)
+			self.atoms.info['bonds'].add(lastCarbon, newCarbon)
 			lastCarbon = newCarbon
 			
 			rotation = dot(rotation, yRotation(-pi+c_angle))
@@ -225,12 +230,10 @@ class amorphousBuilder(object):
 		rotateAtoms(endAtoms, dot(rotation,xRotation(pi)))
 		endAtoms.translate(translation)
 		
-		newCarbon = len(atoms)
-		addAtoms(atoms, endAtoms)
-		atoms.info['bonds'].add(lastCarbon, newCarbon)
+		newCarbon = len(self.atoms)
+		addAtoms(self.atoms, endAtoms)
+		self.atoms.info['bonds'].add(lastCarbon, newCarbon)
 		
-		if self.atoms == None: self.atoms = atoms
-		else: addAtoms(self.atoms, atoms)
 		
 
 def plotEnergies(energyLists):
@@ -253,7 +256,7 @@ def createPVA(boxSize, nchains=1):
 	density = 1.2 *avogadro/46/1e24
 	N = int(density*boxSize**3 / nchains)
 	#N = 1
-	print N, 'monomers'
+	print N, 'monomers per chain'
 
 	builder = amorphousBuilder(box)
 
@@ -284,8 +287,8 @@ if __name__ == '__main__':
 	from atomsview import atomsview
 	from multiasecalc.lammps import compasstypes, charmmtypes
 	atomsview.view(atoms, charmmtypes.data)
-	#atoms.calc = COMPASS(ff_file_path = get_datafile('compass.frc'), debug=True)
-	atoms.calc = CHARMM(get_datafile('par_all36_cgenff.prm'), debug=True)
+	atoms.calc = COMPASS(ff_file_path = get_datafile('compass.frc'), debug=True)
+	#atoms.calc = CHARMM(get_datafile('par_all36_cgenff.prm'), debug=True)
 	min = dynamics.LAMMPSOptimizer(atoms)
 	min.run()
 	from ase.visualize import view

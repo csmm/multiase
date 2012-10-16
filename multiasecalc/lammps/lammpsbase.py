@@ -168,13 +168,18 @@ class LAMMPSBase:
 		self.setup_calculation(atoms)
 		self.evaluate_forces()
 		cur_step = 0
-		nsteps = yield
+		# generator.send() is not available in python 2.4
+		#nsteps = yield
+		yield
+		nsteps = self._md_n_steps
 		while nsteps:
 			self.set_dumpfreq(cur_step+nsteps)
 			cur_step += nsteps
 			self.run_md(fix, timestep, nsteps, update_cell)
 			self.atoms_after_last_calc = atoms
-			nsteps = yield
+			#nsteps = yield
+			yield
+			nsteps = self._md_n_steps
 		self.close_calculation()
 		
 	def setup_calculation(self, atoms):

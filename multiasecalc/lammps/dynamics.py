@@ -49,7 +49,9 @@ class LAMMPSMolecularDynamics(Dynamics):
 				if target_step % interval == 0:
 					if target_step > self.nsteps:
 						# Calculate up to nsteps
-						calculation.send(target_step - self.nsteps)
+						#calculation.send(target_step - self.nsteps)
+						calc._md_n_steps = target_step - self.nsteps
+						calculation.next()
 						self.nsteps = target_step
 					function(*args, **kwargs)
 					
