@@ -4,9 +4,46 @@ from subprocess import Popen, PIPE
 from tempfile import mkdtemp, NamedTemporaryFile
 import numpy as np
 import unitconversion
-from itertools import combinations, permutations
 from bonds import Bonds
 from multiasecalc.lammps.io.lammps import read_lammps_dump
+
+
+# itertools.combinations and itertools.permutations are not in python 2.4
+
+# from itertools import combinations, permutations
+
+def permutations(iterable, r=None):
+    # permutations('ABCD', 2) --> AB AC AD BA BC BD CA CB CD DA DB DC
+    # permutations(range(3)) --> 012 021 102 120 201 210
+    pool = tuple(iterable)
+    n = len(pool)
+    if r is None: r = n
+    if r > n:
+        return
+    indices = range(n)
+    cycles = range(n, n-r, -1)
+    yield tuple(pool[i] for i in indices[:r])
+    while n:
+        for i in reversed(range(r)):
+            cycles[i] -= 1
+            if cycles[i] == 0:
+                indices[i:] = indices[i+1:] + indices[i:i+1]
+                cycles[i] = n - i
+            else:
+                j = cycles[i]
+                indices[i], indices[-j] = indices[-j], indices[i]
+                yield tuple(pool[i] for i in indices[:r])
+                break
+        else:
+            return
+            
+def combinations(iterable, r):
+    pool = tuple(iterable)
+    n = len(pool)
+    for indices in permutations(range(n), r):
+        if sorted(indices) == list(indices):
+            yield tuple(pool[i] for i in indices)
+
 
 __ALL__ = ['LAMMPSBase']
 
@@ -170,7 +207,7 @@ class LAMMPSBase:
 		cur_step = 0
 		# generator.send() is not available in python 2.4
 		#nsteps = yield
-		yield
+		yield None
 		nsteps = self._md_n_steps
 		while nsteps:
 			self.set_dumpfreq(cur_step+nsteps)
@@ -178,7 +215,7 @@ class LAMMPSBase:
 			self.run_md(fix, timestep, nsteps, update_cell)
 			self.atoms_after_last_calc = atoms
 			#nsteps = yield
-			yield
+			yield None
 			nsteps = self._md_n_steps
 		self.close_calculation()
 		
@@ -188,7 +225,7 @@ class LAMMPSBase:
 		if not self.lammps_process.running():
 			self.lammps_process.start(self.tmp_dir, self.lammps_command, filelabel)
 				
-		if all(atoms.pbc == False): 
+		if (atoms.pbc == False).all():
 			# Make sure the atoms are inside the cell
 			inv_cell = np.linalg.inv(atoms.cell)
 			frac_positions = np.dot(inv_cell, atoms.positions.T)
@@ -218,10 +255,21 @@ class LAMMPSBase:
 			
 	def prepare_lammps_io(self):
 		label = '%s%06d' % (self.label, self.calls)
-		args = dict(dir=self.tmp_dir, delete=(not self.debug))
-		self.lammps_trj_file = NamedTemporaryFile(mode='r', prefix='trj_'+label, **args)
-		self.lammps_inputdata_file = NamedTemporaryFile(prefix='data_'+label, **args)
 		
+		# In python 2.4 the delete kwarg doesn't exist
+		#args = dict(dir=self.tmp_dir, delete=(not self.debug))
+		#self.lammps_trj_file = NamedTemporaryFile(mode='r', prefix='trj_'+label, **args)
+		#self.lammps_inputdata_file = NamedTemporaryFile(prefix='data_'+label, **args)
+		
+		if self.debug:
+			self.lammps_trj_file = open(os.path.join(self.tmp_dir, 'trj_'+label), 'w')
+			self.lammps_trj_file.close()
+			self.lammps_trj_file = open(self.lammps_trj_file.name)
+			self.lammps_inputdata_file = open(os.path.join(self.tmp_dir, 'data_'+label), 'w')
+		else:
+			self.lammps_trj_file = NamedTemporaryFile(mode='r', prefix='trj_'+label, dir=self.tmp_dir)
+			self.lammps_inputdata_file = NamedTemporaryFile(prefix='data_'+label, dir=self.tmp_dir)
+			
 		return label
 	
 		
@@ -410,7 +458,7 @@ class LAMMPSBase:
 		
 		pbc = self.atoms.get_pbc()
 		f.write('units %s \n' % parameters.units)
-		f.write('boundary %s %s %s \n' % tuple('sp'[x] for x in pbc))
+		f.write('boundary %s %s %s \n' % tuple('sp'[int(x)] for x in pbc))
 		if parameters.neighbor:
 			f.write('neighbor %s \n' % (parameters.neighbor))
 		if parameters.newton:
@@ -492,8 +540,8 @@ class LAMMPSBase:
 		for title, table in data.tables:
 			if len(table) == 0:  continue
 			f.write('%s \n\n' % title)
-			for index, row in enumerate(table, 1):
-				f.write(('%d'+' %s'*len(row) +'\n') % ((index,) + tuple(row)))
+			for index, row in enumerate(table):
+				f.write(('%d'+' %s'*len(row) +'\n') % ((index+1,) + tuple(row)))
 			f.write('\n\n')
 		
 		f.flush()
@@ -561,8 +609,12 @@ class LammpsProcess:
 		
 		if self.log == True:
 			# Save LAMMPS input and output for reference
-			self.inlog  = NamedTemporaryFile(prefix='in_'+filelabel, dir=tmp_dir, delete=False)
-			self.outlog = NamedTemporaryFile(prefix='log_'+filelabel, dir=tmp_dir, delete=False)
+			
+			# in python 2.4 the delete=False option doesn't exist
+			#self.inlog  = NamedTemporaryFile(prefix='in_'+filelabel, dir=tmp_dir, delete=False)
+			#self.outlog = NamedTemporaryFile(prefix='log_'+filelabel, dir=tmp_dir, delete=False)
+			self.inlog  = open(os.path.join(tmp_dir, 'in_'+filelabel), 'w')
+			self.outlog = open(os.path.join(tmp_dir, 'out_'+filelabel), 'w')
 			
 		return Popen(lammps_cmd_line,
 							cwd=tmp_dir, stdin=PIPE, stdout=PIPE, stderr=sys.stderr)
@@ -627,7 +679,7 @@ class LammpsProcess:
 				raise RuntimeError('LAMMPS execution failed. LAMMPS %s' % line)
 			
 			words = line.split()
-			if words and all(w[0].isupper() for w in words):
+			if words and np.all([w[0].isupper() for w in words]):
 				# Seems to be the start of thermo output
 				keys = translate_keys(words)
 				while True:
@@ -657,7 +709,7 @@ class Prism:
 		self.R = Qtrans
 		self.lammps_cell = Ltrans.T
 	
-		if self.is_skewed() and not all(pbc):
+		if self.is_skewed() and not pbc.all():
 			raise RuntimeError('Skewed lammps cells MUST have '
 							'PBC == True in all directions!')
 
@@ -694,7 +746,7 @@ class SequenceType:
 	def __eq__(self, other):
 		return self.atom_types == other.atom_types
 	def __hash__(self):
-		return sum(hash(tp) for tp in self.atom_types)
+		return int(sum(hash(tp) for tp in self.atom_types) % 1000000)
 	def __repr__(self):
 		return repr(self.atom_types)
 
@@ -714,6 +766,6 @@ class ImproperType:
 	def __eq__(self, other):
 		return self.central == other.central and self.others == other.others
 	def __hash__(self):
-		return hash(self.central) + sum(hash(tp) for tp in self.others)
+		return int((hash(self.central) + sum(hash(tp) for tp in self.others)) % 100000)
 	def __repr__(self):
 		return '%s, %s' %(self.central, self.others)

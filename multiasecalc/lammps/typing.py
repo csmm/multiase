@@ -1,5 +1,35 @@
 import re
-from itertools import permutations
+import numpy as np
+
+#itertools.permutations not in python 2.4
+
+#from itertools import permutations
+
+def permutations(iterable, r=None):
+    # permutations('ABCD', 2) --> AB AC AD BA BC BD CA CB CD DA DB DC
+    # permutations(range(3)) --> 012 021 102 120 201 210
+    pool = tuple(iterable)
+    n = len(pool)
+    if r is None: r = n
+    if r > n:
+        return
+    indices = range(n)
+    cycles = range(n, n-r, -1)
+    yield tuple(pool[i] for i in indices[:r])
+    while n:
+        for i in reversed(range(r)):
+            cycles[i] -= 1
+            if cycles[i] == 0:
+                indices[i:] = indices[i+1:] + indices[i:i+1]
+                cycles[i] = n - i
+            else:
+                j = cycles[i]
+                indices[i], indices[-j] = indices[-j], indices[i]
+                yield tuple(pool[i] for i in indices[:r])
+                break
+        else:
+            return
+            
 
 class SyntaxError(Exception): pass
 class PrecedenceError(Exception): pass
@@ -137,7 +167,7 @@ class TemplateTree(Tree):
 			return False
 			
 		for sequence in permutations(bonded, len(self.children)):
-			if all(ch.match(neigh, atom) for neigh, ch in zip(sequence, self.children)):
+			if np.all([ch.match(neigh, atom) for neigh, ch in zip(sequence, self.children)]):
 				return True
 		return False
 		
@@ -151,7 +181,7 @@ class TemplateTree(Tree):
 			if chain and next_atom == chain[0] and len(chain) in self.ringsize_range:
 				# Test conditions for atoms except the starting atom
 				for sequence in permutations(chain[1:], len(conditions)):
-					if all(c.match(atoms[ind]) for ind, c in zip(sequence, conditions)):
+					if np.all([c.match(atoms[ind]) for ind, c in zip(sequence, conditions)]):
 						return True
 				return False
 			
@@ -161,7 +191,7 @@ class TemplateTree(Tree):
 				return False
 				
 			chain = chain + [next_atom]
-			return any(recursive_finder(chain, atom) for atom in bonds[next_atom])
+			return np.any([recursive_finder(chain, atom) for atom in bonds[next_atom]])
 		
 		return recursive_finder([], atom.index)
 
@@ -169,10 +199,10 @@ class TemplateTree(Tree):
 class PrecedenceTree(Tree):
 	def contains(self, template):
 		return template.type == self.root or \
-				any(ch.contains(template) for ch in self.children)
+				np.any([ch.contains(template) for ch in self.children])
 	
 	def contains_all(self, templates):
-		return all(self.contains(t) for t in templates)
+		return np.all([self.contains(t) for t in templates])
 	
 	def resolve(self, templates):
 		for ch in self.children:

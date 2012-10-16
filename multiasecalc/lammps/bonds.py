@@ -1,6 +1,42 @@
 from ase.data import covalent_radii
-from itertools import combinations, permutations
 import numpy as np
+
+# itertools.combinations and itertools.permutations are not in python 2.4
+
+# from itertools import combinations, permutations
+
+def permutations(iterable, r=None):
+    # permutations('ABCD', 2) --> AB AC AD BA BC BD CA CB CD DA DB DC
+    # permutations(range(3)) --> 012 021 102 120 201 210
+    pool = tuple(iterable)
+    n = len(pool)
+    if r is None: r = n
+    if r > n:
+        return
+    indices = range(n)
+    cycles = range(n, n-r, -1)
+    yield tuple(pool[i] for i in indices[:r])
+    while n:
+        for i in reversed(range(r)):
+            cycles[i] -= 1
+            if cycles[i] == 0:
+                indices[i:] = indices[i+1:] + indices[i:i+1]
+                cycles[i] = n - i
+            else:
+                j = cycles[i]
+                indices[i], indices[-j] = indices[-j], indices[i]
+                yield tuple(pool[i] for i in indices[:r])
+                break
+        else:
+            return
+            
+def combinations(iterable, r):
+    pool = tuple(iterable)
+    n = len(pool)
+    for indices in permutations(range(n), r):
+        if sorted(indices) == list(indices):
+            yield tuple(pool[i] for i in indices)
+
 
 class Bonds:
 	def __init__(self, atoms, pairs=None, autodetect=False):

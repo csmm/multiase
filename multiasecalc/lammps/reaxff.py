@@ -15,7 +15,7 @@ def get_element_order(ff_file):
 
 class ReaxFF(LAMMPSBase):
 	
-	def __init__(self, label='reaxff', specorder=None, ff_file_path='ffield.reax',
+	def __init__(self, ff_file_path, label='reaxff', specorder=None,
 		implementation='C', update_charges=True, save_bond_orders=False, debug_energy=False, **kwargs):
 		
 		LAMMPSBase.__init__(self, label, update_charges = update_charges, **kwargs)
@@ -45,7 +45,7 @@ class ReaxFF(LAMMPSBase):
 		if debug_energy:
 			energy_terms = 'eb', 'ea', 'elp', 'emol', 'ev', 'epen', 'ecoa', 'ehb', 'et', 'eco', 'ew', 'ep', 'efi', 'eqeq'
 			self.parameters.extra_cmds += ['compute reax all pair reax']
-			self.parameters.extra_cmds += ['variable %s equal c_reax[%i]' % (et, i) for i, et in enumerate(energy_terms, 1)]
+			self.parameters.extra_cmds += ['variable %s equal c_reax[%i]' % (et, i+1) for i, et in enumerate(energy_terms)]
 			
 			self._custom_thermo_args += ['v_%s' % et for et in energy_terms]
 			

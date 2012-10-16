@@ -1,6 +1,7 @@
 from lammpsbase import LAMMPSBase
 import read_charmm_params
 import typing, charmmtypes
+import warnings
 
 class CHARMM(LAMMPSBase):
 	
@@ -22,3 +23,7 @@ class CHARMM(LAMMPSBase):
 	def atom_types(self, atoms):
 		self.type_resolver.resolve_atoms(atoms)
 		return atoms.info['atom_types']
+		
+	def prepare_calculation(self, atoms, data):
+		if (atoms.get_charges() == 0).all():
+			warnings.warn("No partial charges set! There won't be any Coulomb interactions.")
