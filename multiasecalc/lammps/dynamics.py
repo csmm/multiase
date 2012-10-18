@@ -56,9 +56,11 @@ class LAMMPSMolecularDynamics(Dynamics):
 					function(*args, **kwargs)
 					
 		if target_step > self.nsteps:
-			calculation.send(target_step - self.nsteps)
+			#calculation.send(target_step - self.nsteps)
+			calc._md_n_steps = target_step - self.nsteps
+			calculation.next()
 		try:
-			calculation.send(None)
+			calculation.next()
 		except StopIteration:
 			pass
 	

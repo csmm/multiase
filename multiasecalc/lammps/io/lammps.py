@@ -29,6 +29,7 @@ def read_lammps_dump(fileobj, index=-1):
 			velocities = None
 			forces = None
 			quaternions = None
+			charges = None
 
 		if 'ITEM: NUMBER OF ATOMS' in line:
 			line = lines.pop(0)
@@ -85,6 +86,9 @@ def read_lammps_dump(fileobj, index=-1):
 			if 'c_q[1]' in atom_attributes:
 				quaternions = np.zeros((natoms, 4))*np.nan
 			
+			if 'q' in atom_attributes:
+				charges = np.zeros(natoms)
+			
 			def get_values(fields, keys):
 				return [float(fields[atom_attributes[key]]) for key in keys]
 			
@@ -104,7 +108,9 @@ def read_lammps_dump(fileobj, index=-1):
 				if forces != None:
 					forces[id-1] = get_values(fields, ['fx', 'fy', 'fz'])
 				if quaternions != None:
-					quaternions = get_value(fields, ['c_q[1]', 'c_q[2]', 'c_q[3]', 'c_q[4]'])
+					quaternions[id-1] = get_values(fields, ['c_q[1]', 'c_q[2]', 'c_q[3]', 'c_q[4]'])
+				if charges != None:
+					charges[id-1] = get_values(fields, 'q')[0]
 
 			#if len(quaternions):
 			#    images.append(Quaternions(symbols=types,
@@ -112,12 +118,15 @@ def read_lammps_dump(fileobj, index=-1):
 			#                              cell=cell, celldisp=celldisp,
 			#                              quaternions=quaternions, info=info))
 
+			atoms = Atoms(symbols=types, positions=positions, cell=cell)
+			if velocities != None: 
+				atoms.set_velocities(velocities)
+			if charges != None:
+				atoms.set_charges(charges)
 			info = dict(celldisp=celldisp)
 			if forces != None:
 				info['forces'] = forces
-			atoms = Atoms(symbols=types, positions=positions, cell=cell, info=info)
-			if velocities != None: 
-				atoms.set_velocities(velocities)
+			atoms.info = info
 			images.append(atoms)
 
 	return images[index]
