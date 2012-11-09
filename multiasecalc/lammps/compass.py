@@ -8,15 +8,16 @@ class COMPASS(LAMMPSBase):
 		LAMMPSBase.__init__(self, label, **kwargs)
 		
 		self.parameters.units          = 'real'
-		self.parameters.pair_style     = 'lj/class2/coul/cut %f' % pair_cutoff
+		#self.parameters.pair_style     = 'lj/class2/coul/cut %f' % pair_cutoff
+		self.parameters.pair_style     = 'lj/class2/coul/long %f' % pair_cutoff
 		self.parameters.bond_style     = 'class2'
 		self.parameters.angle_style    = 'class2'
 		self.parameters.dihedral_style = 'class2'
 		self.parameters.improper_style = 'class2'
 		self.parameters.special_bonds  =  'lj/coul 0.0 0.0 1.0 dihedral yes'
+		self.parameters.kspace_style   = 'ewald 0.0001'
 		
 		self.ff_data, self.bond_increments = read_compass_params.read(open(ff_file_path))
-		#self.ff_data.dihedral = {}
 		self.type_resolver = typing.TypeResolver(compasstypes.data)
 	
 	def atom_types(self, atoms):

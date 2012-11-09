@@ -8,13 +8,18 @@ import QtQuick 1.1
      property real viewHeight: 10
      property real viewWidth: width * viewscale
      
-	function elementColor(element) {
+    function elementColor(element) {
+		var col = viewState.jmolColor(element)
+		return Qt.rgba(col[0], col[1], col[2], 1)
+	}
+     
+	function elementColor2(element) {
 		var colors = {'H': "white", 'C': "#442211", 'O': "#880000", 'N': "#0000BB", 'Al': "darkgray", 'Si': "turquoise"}
 		return colors[element]
 	}
 	
 	function elementSize(element) {
-		var sizes = {'H': .3, 'C': .45, 'O': .40, 'N': .40, 'Al': .60, 'Si': .45}
+		var sizes = {'H': .3, 'C': .45, 'O': .40, 'N': .40, 'Al': .60, 'Mg': .60, 'Si': .45}
 		return sizes[element]
 	}
 	
@@ -89,7 +94,7 @@ import QtQuick 1.1
 			y: ((y1+y2)/2/viewHeight + .5) * container.height
 			z: (z1+z2)/2 + 100
 			rotation: Math.atan((y2-y1)/(x2-x1)) *180 / Math.PI
-			visible: length3d < 2
+			visible: length3d < 3
 			
 			property real length2d: hypotenuse(x2-x1, y2-y1)
 			property real length3d: hypotenuse(length2d, z2-z1)

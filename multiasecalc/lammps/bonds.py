@@ -40,24 +40,32 @@ except:
 
 
 class Bonds:
-	def __init__(self, atoms, pairs=None, autodetect=False):
+	def __init__(self, atoms, pairs=None, autodetect=False, tolerance=1.15):
 		self.len_atoms = len(atoms)
 		if autodetect:
-			self.detect(atoms)
+			self.detect(atoms, tolerance)
 		elif pairs:
 			self.pairs = np.array(pairs)
 		else:
 			self.pairs = np.zeros((0,2), dtype=int)
 			
-	def detect(self, atoms):
-		tolerance = 1.15
-		def bonded(i, j):
-			bondLength = covalent_radii[atoms[i].number] + covalent_radii[atoms[j].number]
-			return atoms.get_distance(i, j, mic=True) < bondLength*tolerance
+	def detect(self, atoms, tolerance):
+		frac_coords = atoms.get_scaled_positions()
 		
-		N = len(atoms)
-		pairs = [pair for pair in combinations(range(N), 2) if bonded(*pair)]
-		self.pairs = np.array(pairs)
+		distances_sq = np.zeros((len(atoms), len(atoms)))
+		for dim in range(3):
+			X2, X1 = np.meshgrid(frac_coords[:,dim], frac_coords[:,dim])
+			fracdist = X2 - X1
+			if atoms.pbc[dim]:
+				fracdist -= np.round(fracdist) # MIC
+			distances_sq += (fracdist*np.linalg.norm(atoms.cell[dim]))**2
+		
+		covradii = np.array([covalent_radii[n] for n in atoms.numbers])
+		R2, R1 = np.meshgrid(covradii, covradii)
+		
+		bonded = ((R1+R2)*tolerance)**2 > distances_sq
+		bonded = np.triu(bonded, 1)
+		self.pairs = np.array(np.where(bonded)).T
 	
 	
 	def __getitem__(self, i):
@@ -75,6 +83,17 @@ class Bonds:
 		
 	def add(self, i, j):
 		self.pairs = np.append(self.pairs, np.array((i,j), ndmin=2), axis=0)
+		
+	def remove(self, i, j):
+		hits = ((self.pairs == (i,j)) + (self.pairs == (j,i)))
+		if not np.any(hits):
+			raise IndexError('Bond (%i, %i) does not exist!' % (i,j))
+		self.pairs = self.pairs[~hits.all(1),:]
+	
+	def get_bond_matrix(self):
+		matrix = np.zeros((self.len_atoms, self.len_atoms))
+		matrix[self.pairs[:,0], self.pairs[:,1]] = 1
+		return matrix
 		
 	def atoms_extending(self, new_atoms):
 		if 'bonds' in new_atoms.info:

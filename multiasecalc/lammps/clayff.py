@@ -4,14 +4,22 @@ import typing
 
 class ClayFF(LAMMPSBase):
 	
-	def __init__(self, label='clayff', pair_cutoff=10.0, **kwargs):
+	def __init__(self, label='clayff', pair_cutoff=(10.0, 10.0), **kwargs):
 		LAMMPSBase.__init__(self, label, **kwargs)
 		
+		try:
+			ljcut, coulcut = pair_cutoff
+		except:
+			ljcut = pair_cutoff
+			coulcut = pair_cutoff
+		
 		self.parameters.units          = 'real'
-		self.parameters.pair_style     = 'lj/cut/coul/cut %f' % pair_cutoff
+		self.parameters.pair_style     = 'lj/cut/coul/long %f %f' % (ljcut, coulcut)
+		#self.parameters.pair_style     = 'lj/cut/coul/cut %f %f' % (ljcut, coulcut)
 		self.parameters.pair_modify    = 'mix arithmetic'
 		self.parameters.bond_style     = 'harmonic'
 		self.parameters.angle_style    = 'harmonic'
+		self.parameters.kspace_style   = 'ewald/disp 0.0001'
 		
 		self.ff_data = ff_data
 		self.type_resolver = typing.TypeResolver(clayff_types)
@@ -123,26 +131,22 @@ type: ob
 	
 type: obos
 	! Bridging oxygen with octahedral substitution
-	template: [O (Si)(^SiAl)]
-	
-type: obos
-	! Bridging oxygen with octahedral substitution
-	template: [O (Si)(Al)(^SiAl)]
+	template: [O (Si)(Al)(^SiAl(O(H)))]
 	
 type: obts
 	! Bridging oxygen with tetrahedral substitution
-	template: (O (Al)(^SiAl))
+	template: (O (Si)(^SiAl))
 
 type: obss
 	! Bridging oxygen with double substitution
-	template: (O (^SiAl)(^SiAl))
+	template: (O (SiAl)(^SiAl)(^SiAl))
 	
 type: ohs
 	! Hydroxyl oxygen with substitution
-	template: [O [H](^Al)]
+	template: (O [H](^Al))
 
 # Oxygen precedences
-precedence: ((h*) (oh (ohs)) (ob (obts (obss)) (obos)))
+precedence: ((o*) (oh (ohs)) (ob (obos) (obts) (obss)))
 	
 type: st
 	! Tetrahedral silicon 
@@ -190,7 +194,11 @@ type: K
 type: Cs
 	! Aqueous cesium ion
 	template: (Cs)
-	
+
+type: Ca
+	! Aqueous calcium ion
+	template: (Ca)
+
 type: Ba
 	! Aqueous barium ion
 	template: (Ba)

@@ -1,3 +1,5 @@
+# Almost all types for neutral molecules containing C, H, O and N are supported.
+
 data = r"""
 
 # **** Hydrogen ****

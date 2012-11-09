@@ -1,11 +1,11 @@
 from PyQt4.QtCore import pyqtSlot, pyqtSignal, pyqtProperty
 from PyQt4.QtCore import QAbstractListModel, QModelIndex
-from PyQt4.QtCore import Qt, QObject, QUrl
-from PyQt4.QtGui import QApplication, QWidget
+from PyQt4.QtCore import Qt, QObject, QUrl, QStringList
+from PyQt4.QtGui import QApplication, QWidget, QColor, qRgb
 from PyQt4.QtDeclarative import QDeclarativeView
 import os
 import numpy as np
-from ase.data import covalent_radii, vdw_radii
+from ase.data import covalent_radii, vdw_radii, colors, atomic_numbers
 from multiasecalc.lammps.typing import TypeResolver
 from multiasecalc.lammps.bonds import Bonds
 from multiasecalc.lammps import charmmtypes, compasstypes
@@ -65,6 +65,12 @@ class ViewState(QObject):
 		y_rot = y_rotation(x_radians)
 		self.rotation = np.dot(np.dot(x_rot,y_rot), self.rotation)
 		self.update_coordinates()
+	
+	@pyqtSlot(str, result='QVariantList')
+	def jmolColor(self, element):
+		number = atomic_numbers[str(element)]
+		color = colors.jmol_colors[number]
+		return [float(c) for c in color]
 
 def x_rotation(th):
 	c, s = np.cos(th), np.sin(th)

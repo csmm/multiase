@@ -13,16 +13,16 @@ atoms = s22.create_s22_system('Methane_dimer')
 atoms.center(vacuum=10.0)
 print atoms.positions
 
-atoms.calc = COMPASS(ff_file_path=get_datafile('compass.frc'))
+atoms.calc = COMPASS(ff_file_path=get_datafile('compass.frc'), debug=True)
 optimizer = LAMMPSOptimizer(atoms)
 optimizer.run()
 print atoms.positions
 
-atoms.calc = ReaxFF(ff_file_path=get_datafile('ffield.reax'))
+atoms.calc = ReaxFF(ff_file_path=get_datafile('ffield.reax'), debug=True)
 dyn = LAMMPS_NVT(atoms, 1*units.fs, 100, trajectory='test.traj', traj_interval = 2)
 dyn.run(5)
 
-atoms.calc = COMPASS(ff_file_path=get_datafile('compass.frc'))
+atoms.calc = COMPASS(ff_file_path=get_datafile('compass.frc'), debug=True)
 dyn.run(10)
 
 trj = PickleTrajectory('test.traj', 'r')

@@ -22,10 +22,12 @@ if __name__ == '__main__':
 	filename = sys.argv[1]
 	if len(sys.argv) == 3:
 		traj = PickleTrajectory(filename)
-		out = PickleTrajectory(sys.argv[2], 'w')
+		images = []
 		for atoms in traj:
 			unfold_periodic(atoms)
-			out.write(atoms)
+			atoms.calc = None
+			images.append(atoms)
+		io.write(sys.argv[2], images)
 	else:
 		atoms = io.read(filename)
 		if not 'bonds' in atoms.info:

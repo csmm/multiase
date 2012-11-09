@@ -1,3 +1,4 @@
+from ase.calculators.interface import Calculator
 import os, sys
 import shutil, shlex
 from subprocess import Popen, PIPE
@@ -63,6 +64,7 @@ class LAMMPSParameters:
 		self.angle_style    = pars.get('angle_style')        
 		self.dihedral_style = pars.get('dihedral_style')
 		self.improper_style = pars.get('improper_style')
+		self.kspace_style   = pars.get('kspace_style')
 		self.special_bonds  = pars.get('special_bonds')
 		self.pair_modify    = pars.get('pair_modify')
 		
@@ -70,6 +72,9 @@ class LAMMPSParameters:
 		self.pair_coeffs    = pars.get('pair_coeffs', [])
 		
 		self.extra_cmds     = pars.get('extra_cmds', [])
+		
+		# Atoms groups: tuples (group_id, list_of_indices)
+		self.groups         = pars.get('groups', [])
 
 class LAMMPSData:
 	def __init__(self):
@@ -103,9 +108,22 @@ class FFData:
 		groupdict = getattr(self, group)
 		d = groupdict.setdefault(type, {})
 		d[title] = values
+		
+	def copy(self):
+		result = FFData()
+		result.extend(self)
+		result.class2 = self.class2
+		return result
+		
+	def extend(self, other):
+		self.atom.update(other.atom)
+		self.bond.update(other.bond)
+		self.angle.update(other.angle)
+		self.dihedral.update(other.dihedral)
+		self.improper.update(other.improper)
 
 
-class LAMMPSBase:
+class LAMMPSBase(Calculator):
 
 	def __init__(self, label='lammps', tmp_dir=None, parameters={}, 
 				update_charges = False, lammps_command=None,
@@ -188,7 +206,7 @@ class LAMMPSBase:
 		self.evaluate_forces()
 		self.close_calculation()
 	
-	def minimize(self, atoms, etol=0, ftol=0, maxeval=100000, maxiter=100000000, min_style=None):
+	def minimize(self, atoms, etol=0, ftol=0, maxeval=100000, maxiter=100000000, min_style=None, relax_cell=False):
 		if etol == 0 and ftol == 0: 
 			raise RuntimeError('Specify at least one tolerance value!')
 		ftol = self.from_ase_units(ftol, 'force')
@@ -196,37 +214,68 @@ class LAMMPSBase:
 		
 		self.setup_calculation(atoms)
 		self.evaluate_forces()
-		self.run_minimization(minimize_params, min_style)
-		self.close_calculation()
-
 		
-	def molecular_dynamics(self, atoms, timestep, fix, update_cell):
+		self.set_dumpfreq(999999)
+		f = self.lammps_process
+		if relax_cell:
+			f.write('fix relax_cell all box/relax tri 0.0 nreset 20\n')
+		if min_style:
+			f.write('min_style %s\n' % min_style)
+		f.write('minimize %s\n'  % minimize_params)
+		if relax_cell:
+			f.write('unfix relax_cell\n')
+		f.write('print "%s"\n' % CALCULATION_END_MARK)
+		f.flush()
+		self.lammps_process.read_lammps_output()
+		self.read_lammps_trj(update_positions=True)
+		self.close_calculation()
+		
+	def molecular_dynamics(self, atoms, timestep, fix, step_iterator, update_cell, total_steps, constraints):
 		fix = fix
 		timestep = str(self.from_ase_units(timestep, 'time'))
 		self.setup_calculation(atoms)
 		self.evaluate_forces()
 		cur_step = 0
-		# generator.send() is not available in python 2.4
-		#nsteps = yield
-		yield None
-		nsteps = self._md_n_steps
-		while nsteps:
-			self.set_dumpfreq(cur_step+nsteps)
-			cur_step += nsteps
-			self.run_md(fix, timestep, nsteps, update_cell)
-			self.atoms_after_last_calc = atoms
-			#nsteps = yield
-			yield None
-			nsteps = self._md_n_steps
-		self.close_calculation()
 		
+		f = self.lammps_process
+		f.write('fix mdfix %s\n' % fix)
+		f.write('timestep %s\n' % timestep)
+		for c in constraints:
+			for cmd in c.get_commands(self.atoms):
+				f.write(cmd + '\n')
+		
+		for nsteps in step_iterator:
+			self.set_dumpfreq(cur_step+nsteps)
+			if total_steps:
+				f.write('run %s start 0 stop %s\n' % (nsteps, total_steps))
+			else:
+				f.write('run %s\n' % nsteps)
+			f.write('print "%s"\n' % CALCULATION_END_MARK)
+			f.flush()
+			self.lammps_process.read_lammps_output()
+			self.read_lammps_trj(update_positions=True, update_cell=update_cell)
+			
+			self.atoms_after_last_calc = atoms
+			cur_step += nsteps
+			
+		self.close_calculation()
+	
+	def evaluate_forces(self):
+		self.set_dumpfreq(1)
+		f = self.lammps_process
+		f.write('run 0\n')
+		f.write('print "%s"\n' % CALCULATION_END_MARK)
+		f.flush()
+		self.lammps_process.read_lammps_output()
+		self.read_lammps_trj(update_positions=False)
+	
 	def setup_calculation(self, atoms):
 		filelabel = self.prepare_lammps_io()
 		
 		if not self.lammps_process.running():
 			self.lammps_process.start(self.tmp_dir, self.lammps_command, filelabel)
 				
-		if (atoms.pbc == False).all():
+		if np.all(atoms.pbc == False):
 			# Make sure the atoms are inside the cell
 			inv_cell = np.linalg.inv(atoms.cell)
 			frac_positions = np.dot(inv_cell, atoms.positions.T)
@@ -273,37 +322,6 @@ class LAMMPSBase:
 			
 		return label
 	
-		
-	def evaluate_forces(self):
-		self.set_dumpfreq(1)
-		f = self.lammps_process
-		f.write('run 0\n')
-		f.write('print "%s"\n' % CALCULATION_END_MARK)
-		f.flush()
-		self.lammps_process.read_lammps_output()
-		self.read_lammps_trj(update_positions=False)
-		
-	def run_minimization(self, param_string, min_style=None):
-		self.set_dumpfreq(999999)
-		f = self.lammps_process
-		if min_style:
-			f.write('min_style %s\n' % min_style)
-		f.write('minimize %s\n'  % param_string)
-		f.write('print "%s"\n' % CALCULATION_END_MARK)
-		f.flush()
-		self.lammps_process.read_lammps_output()
-		self.read_lammps_trj(update_positions=True)
-		
-	def run_md(self, fix, timestep, nsteps, update_cell=False):
-		f = self.lammps_process
-		f.write('fix fix_all %s\n' % fix)
-		f.write('timestep %s\n' % timestep)
-		f.write('run %s\n' % nsteps)
-		f.write('print "%s"\n' % CALCULATION_END_MARK)
-		f.flush()
-		self.lammps_process.read_lammps_output()
-		self.read_lammps_trj(update_positions=True, update_cell=update_cell)
-	
 	
 	def prepare_data(self):
 		""" Prepare self.data for write_lammps_data() using self.ff_data """
@@ -320,29 +338,33 @@ class LAMMPSBase:
 		
 		b = atoms.info['bonds']
 		bonds = []
-		for indices in b:
-			type = SequenceType([atom_types[i] for i in indices])
-			bonds.append(dict(indices=indices, type=type))
+		if self.parameters.bond_style:
+			for indices in b:
+				type = SequenceType([atom_types[i] for i in indices])
+				bonds.append(dict(indices=indices, type=type))
 			
 		angles = []
-		for indices in b.find_angles():
-			type = SequenceType([atom_types[i] for i in indices])
-			angles.append(dict(indices=indices, type=type))
+		if self.parameters.angle_style:
+			for indices in b.find_angles():
+				type = SequenceType([atom_types[i] for i in indices])
+				angles.append(dict(indices=indices, type=type))
 			
 		dihedrals = []
-		for indices in b.find_dihedrals():
-			type = SequenceType([atom_types[i] for i in indices])
-			dihedrals.append(dict(indices=indices, type=type))
+		if self.parameters.dihedral_style:
+			for indices in b.find_dihedrals():
+				type = SequenceType([atom_types[i] for i in indices])
+				dihedrals.append(dict(indices=indices, type=type))
 		
 		impropers = []
-		for indices in b.find_impropers():
-			if ff_data.class2:
-				j, i, k, l = indices
-			else:
-				i, j, k, l = indices
-			a, c, b, d = (atom_types[ind] for ind in indices)
-			type = ImproperType(central_type=a, other_types=(c,b,d), class2=ff_data.class2)
-			impropers.append(dict(indices=(i,j,k,l), type=type))
+		if self.parameters.improper_style:
+			for indices in b.find_impropers():
+				if ff_data.class2:
+					j, i, k, l = indices
+				else:
+					i, j, k, l = indices
+				a, c, b, d = (atom_types[ind] for ind in indices)
+				type = ImproperType(central_type=a, other_types=(c,b,d), class2=ff_data.class2)
+				impropers.append(dict(indices=(i,j,k,l), type=type))
 		
 		# Coeffs
 		# Helper functions
@@ -482,6 +504,9 @@ class LAMMPSBase:
 		if parameters.improper_style and self.data.impropers:
 			f.write('improper_style %s \n' % parameters.improper_style)
 		
+		if parameters.kspace_style:
+			f.write('kspace_style %s \n' % parameters.kspace_style)
+		
 		if parameters.special_bonds:
 			f.write('special_bonds %s \n' % parameters.special_bonds)
 			
@@ -495,10 +520,15 @@ class LAMMPSBase:
 		for line in parameters.pair_coeffs:
 			f.write('pair_coeff %s \n' % line)
 		
+		# Create groups
+		for group_id, indices in parameters.groups:
+			indices_str = ' '.join([str(i+1) for i in indices])
+			f.write('group %s id %s\n' % (group_id, indices_str))
+		
 		for cmd in parameters.extra_cmds:
 			f.write(cmd + '\n')
 		
-		f.write('thermo_style custom %s\n' % (' '.join(self._custom_thermo_args)))
+		f.write('\nthermo_style custom %s\n' % (' '.join(self._custom_thermo_args)))
 		f.write('thermo 0\n')
 		
 		f.write('\ndump dump_all all custom ' +
@@ -710,7 +740,7 @@ class Prism:
 		self.R = Qtrans
 		self.lammps_cell = Ltrans.T
 	
-		if self.is_skewed() and not pbc.all():
+		if self.is_skewed() and not np.all(pbc):
 			raise RuntimeError('Skewed lammps cells MUST have '
 							'PBC == True in all directions!')
 
