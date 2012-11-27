@@ -78,7 +78,7 @@ def test_s22():
 		#'2-pyridoxine_2-aminopyridine_complex',
 		#'Adenine-thymine_Watson-Crick_complex',
 		'Methane_dimer',
-		'Ethene_dimer',
+		#'Ethene_dimer',
 		'Benzene-methane_complex',
 		#'Benzene_dimer_parallel_displaced',
 		#'Pyrazine_dimer',
