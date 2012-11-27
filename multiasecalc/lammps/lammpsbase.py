@@ -6,14 +6,13 @@ from tempfile import mkdtemp, NamedTemporaryFile
 import numpy as np
 import unitconversion
 from bonds import Bonds
+from ffdata import FFData, SequenceType, ImproperType
 from multiasecalc.lammps.io.lammps import read_lammps_dump
-
-
-# itertools.combinations and itertools.permutations are not in python 2.4
 
 try:
 	from itertools import combinations, permutations
 except:
+	# itertools.combinations and itertools.permutations are not in python 2.4
 	def permutations(iterable, r=None):
 		# permutations('ABCD', 2) --> AB AC AD BA BC BD CA CB CD DA DB DC
 		# permutations(range(3)) --> 012 021 102 120 201 210
@@ -94,33 +93,6 @@ class LAMMPSData:
 		self.angle_typeorder = None
 		self.dihedral_typeorder = None
 		self.improper_typeorder = None
-
-class FFData:
-	def __init__(self):
-		self.atom = {}
-		self.bond = {}
-		self.angle = {}
-		self.dihedral = {}
-		self.improper = {}
-		self.class2 = False
-		
-	def add(self, group, type, title, values):
-		groupdict = getattr(self, group)
-		d = groupdict.setdefault(type, {})
-		d[title] = values
-		
-	def copy(self):
-		result = FFData()
-		result.extend(self)
-		result.class2 = self.class2
-		return result
-		
-	def extend(self, other):
-		self.atom.update(other.atom)
-		self.bond.update(other.bond)
-		self.angle.update(other.angle)
-		self.dihedral.update(other.dihedral)
-		self.improper.update(other.improper)
 
 
 class LAMMPSBase(Calculator):
@@ -341,19 +313,22 @@ class LAMMPSBase(Calculator):
 		if self.parameters.bond_style:
 			for indices in b:
 				type = SequenceType([atom_types[i] for i in indices])
-				bonds.append(dict(indices=indices, type=type))
+				actual_type = ff_data.get_actual_type('bond', type)
+				bonds.append(dict(indices=indices, type=actual_type))
 			
 		angles = []
 		if self.parameters.angle_style:
 			for indices in b.find_angles():
 				type = SequenceType([atom_types[i] for i in indices])
-				angles.append(dict(indices=indices, type=type))
+				actual_type = ff_data.get_actual_type('angle', type)
+				angles.append(dict(indices=indices, type=actual_type))
 			
 		dihedrals = []
 		if self.parameters.dihedral_style:
 			for indices in b.find_dihedrals():
 				type = SequenceType([atom_types[i] for i in indices])
-				dihedrals.append(dict(indices=indices, type=type))
+				actual_type = ff_data.get_actual_type('dihedral', type)
+				dihedrals.append(dict(indices=indices, type=actual_type))
 		
 		impropers = []
 		if self.parameters.improper_style:
@@ -364,55 +339,52 @@ class LAMMPSBase(Calculator):
 					i, j, k, l = indices
 				a, c, b, d = (atom_types[ind] for ind in indices)
 				type = ImproperType(central_type=a, other_types=(c,b,d), class2=ff_data.class2)
-				impropers.append(dict(indices=(i,j,k,l), type=type))
+				actual_type = ff_data.get_actual_type('improper', type)
+				impropers.append(dict(indices=(i,j,k,l), type=actual_type))
 		
-		# Coeffs
-		# Helper functions
-		def get_tablenames(params):
-			d = {}
-			for entry in params.values():
-				d.update((name, len(params)) for name, params in entry.items())
-			return d.items()
-			
-		def coeff_table_generator(title, params, typeorder, empty_value, warn_missing):
-			for type in typeorder:
-				try:
-					yield params[type][title]
-				except KeyError:
-					if warn_missing: print 'No %s for %s!' % (title, type)
-					yield empty_value
-		
-		def add_coeff_tables(params, objects, typeorder=None, warn_missing=True):
-			if not params or not objects: return
+		# Coeffs	
+		def add_coeff_tables(param_group, objects, typeorder=None, warn_missing=True):
+			if not objects: return
 			if typeorder:
 				used_types = typeorder
 			else:
 				used_types = set(object['type'] for object in objects)
-			used_params = {}
-			for type in used_types:
-				try: used_params[type] = params[type]
-				except KeyError:
-					if warn_missing: print 'No parameters for %s!' % type
 			
-			if not typeorder:
-				typeorder = used_params.keys()
+			typeorder = []
+			available_tables = ff_data.available_tables(param_group)
+			new_tables = {}
+			for type in used_types:
+				try:
+					actual_type = ff_data.get_actual_type(param_group, type)
+					params = ff_data.get(param_group, actual_type)
+				except KeyError:
+					if warn_missing: print 'No parameters for %s!' % actual_type
+					continue
+				typeorder.append(actual_type)
 				
-			for title, ncols in get_tablenames(params):
-				table = coeff_table_generator(title, used_params, typeorder, [0]*ncols, warn_missing)
-				tables.append((title, list(table)))
+				for title, ncols in available_tables:
+					try:
+						values = params[title]
+					except KeyError:
+						if warn_missing: print 'No %s for %s!' % (title, actual_type)
+						values = [0]*ncols
+					table = new_tables.setdefault(title, [])
+					table.append(values)
+			tables.extend(new_tables.items())
 			return typeorder
 		
 		# Add masses to ff_data
 		masses = dict(zip(atom_types, self.atoms.get_masses()))
 		for type in atom_typeorder:
-			ff_data.add('atom', type, 'Masses', [masses[type]])
+			actual_type = ff_data.get_actual_type('atom', type)
+			ff_data.add('atom', actual_type, 'Masses', [masses[type]])
 			
-		add_coeff_tables(ff_data.atom, atom_types, atom_typeorder)
+		add_coeff_tables('atom', atom_types, atom_typeorder)
 		
-		bond_typeorder     = add_coeff_tables(ff_data.bond, bonds, warn_missing=self.debug)
-		angle_typeorder    = add_coeff_tables(ff_data.angle, angles, warn_missing=self.debug)
-		dihedral_typeorder = add_coeff_tables(ff_data.dihedral, dihedrals, warn_missing=self.debug)
-		improper_typeorder = add_coeff_tables(ff_data.improper, impropers, warn_missing=self.debug)
+		bond_typeorder     = add_coeff_tables('bond', bonds, warn_missing=self.debug)
+		angle_typeorder    = add_coeff_tables('angle', angles, warn_missing=self.debug)
+		dihedral_typeorder = add_coeff_tables('dihedral', dihedrals, warn_missing=self.debug)
+		improper_typeorder = add_coeff_tables('improper', impropers, warn_missing=self.debug)
 		
 		# Atoms
 		self.set_charges(atoms, atom_types)
@@ -768,35 +740,3 @@ class Prism:
 		return np.sum(np.tril(cell_sq, -1)) / np.sum(np.diag(cell_sq)) > tolerance
 
 
-class SequenceType:
-	def __init__(self, atom_types):
-		if atom_types[0] < atom_types[-1]:
-			self.atom_types = list(atom_types)
-		else:
-			self.atom_types = list(reversed(atom_types))
-	def __eq__(self, other):
-		return self.atom_types == other.atom_types
-	def __hash__(self):
-		return int(sum(hash(tp) for tp in self.atom_types) % 1000000)
-	def __repr__(self):
-		return repr(self.atom_types)
-
-class ImproperType:
-	def __init__(self, atom_types=None, central_type=None, other_types=None, class2=False):
-		if central_type and other_types:
-			self.central = central_type
-			self.others = sorted(other_types)
-		elif class2:
-			self.central = atom_types[0]
-			self.others = sorted(atom_types[1:])
-		else:
-			self.central =  atom_types[1]
-			self.others = sorted([atom_types[0]]+atom_types[2:])
-	def get_types(self):
-		return self.central, self.others
-	def __eq__(self, other):
-		return self.central == other.central and self.others == other.others
-	def __hash__(self):
-		return int((hash(self.central) + sum(hash(tp) for tp in self.others)) % 100000)
-	def __repr__(self):
-		return '%s, %s' %(self.central, self.others)

@@ -41,7 +41,7 @@ class COMPASSSystem():
             neighbor   = '2.0 nsq', # bin mode seems to fail with dimers
             )
             
-        calc = COMPASS(ff_file_path=get_datafile('compass.frc'), parameters=parameters)
+        calc = COMPASS(ff_file_path=get_datafile('compass.frc'), parameters=parameters, debug=True)
         return calc
     
     def get_potential_energy(self):

@@ -1,22 +1,5 @@
-from lammpsbase import SequenceType, ImproperType, FFData
+from ffdata import SequenceType, ImproperType, FFData
 import numpy as np
-
-# itertools.product not in python 2.4
-
-try:
-	from itertools import product
-except:
-	def product(*args, **kwds):
-		# product('ABCD', 'xy') --> Ax Ay Bx By Cx Cy Dx Dy
-		# product(range(2), repeat=3) --> 000 001 010 011 100 101 110 111
-		pools = map(tuple, args) * kwds.get('repeat', 1)
-		result = [[]]
-		for pool in pools:
-			result = [x+[y] for x in result for y in pool]
-		for prod in result:
-			yield tuple(prod)
-
-
 
 def fileIterator(infile):
 	import re
@@ -50,27 +33,19 @@ def read(infile):
 	
 	# **** Equivalence ****
 	table = tables['equivalence']
-	equivalence = np.array([row.split()[2:] for row in table.split('\n')])
-	
-	def formalTypes(actualTypes, category):
-		columns = ['NonB', 'Bond', 'Angle', 'Torsion', 'OOP']
-		col = columns.index(category)+1
-		def formalTypesSingle(actualType):
-			indices = np.where(equivalence[:,col] == actualType)[0]
-			return equivalence[indices, 0]
-			
-		for types in product(*(formalTypesSingle(at) for at in actualTypes)):
-			yield types
+	for row in table.splitlines():
+		fields = row.split()[2:]
+		order = ['atom', 'bond', 'angle', 'dihedral', 'improper']
+		ff_data.add_equivalence(fields[0], **dict(zip(order, fields[1:])))
 	
 	def iterateTable(data, category):
 		nAtomTypes = dict(NonB=1, Bond=2, Angle=3, Torsion=4, OOP=4)[category]
-		for line in data.split('\n'):
-			if '*' in line: continue # Ignore these for now
+		for line in data.splitlines():
 			row = line.split()
-			actualTypes = row[2:2+nAtomTypes]
+			if '*' in row: continue # Ignore these for now
+			actual_types = tuple(row[2:2+nAtomTypes])
 			values = [float(val) for val in row[2+nAtomTypes:]]
-			for types in formalTypes(actualTypes, category):
-				yield types, values
+			yield actual_types, values
 	
 	# **** Bond coeffs ****
 	table = tables['quartic_bond']
@@ -78,6 +53,10 @@ def read(infile):
 		type = SequenceType(atomTypes)
 		ff_data.bond[type] = {'Bond Coeffs': values}
 		R0[type] = values[0]
+		try:
+			dihedral_type = ff_data.get_actual_type('dihedral', type)
+			R0[dihedral_type] = values[0]
+		except KeyError: pass
 	
 	# **** Angle coeffs ****
 	table = tables['quartic_angle']
@@ -86,6 +65,10 @@ def read(infile):
 		type = SequenceType(atomTypes)
 		ff_data.angle[type] = {'Angle Coeffs': values}
 		theta0[type] = values[0]
+		try:
+			improper_type = ff_data.get_actual_type('improper', type)
+			theta0[improper_type] = values[0]
+		except KeyError: pass
 	 
 	# **** Bond/bond ****
 	table = tables['bond-bond']
