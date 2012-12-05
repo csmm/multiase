@@ -1,4 +1,5 @@
 from lammpsbase import LAMMPSBase
+from ffdata import SequenceType
 import read_gromacs_params
 import typing, oplsaatypes
 import warnings
@@ -24,6 +25,10 @@ class OPLSAA(LAMMPSBase):
 		
 		self.ff_data, self.charges = read_gromacs_params.read((ffnonbonded, ffbonded), return_charges=True)
 		self.type_resolver = typing.TypeResolver(oplsaatypes.data)
+		
+		# Add parameters for flexible TIP3P water
+		self.ff_data.add('bond', SequenceType(['OW', 'HW']), 'Bond Coeffs', [450, 0.9572])
+		self.ff_data.add('angle', SequenceType(['HW', 'OW', 'HW']), 'Angle Coeffs', [55, 104.52])
 		
 	def atom_types(self, atoms):
 		self.type_resolver.resolve_atoms(atoms)
