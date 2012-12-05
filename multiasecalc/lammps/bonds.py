@@ -44,7 +44,7 @@ class Bonds:
 		self.len_atoms = len(atoms)
 		if autodetect:
 			self.detect(atoms, tolerance)
-		elif pairs:
+		elif pairs != None:
 			self.pairs = np.array(pairs)
 		else:
 			self.pairs = np.zeros((0,2), dtype=int)

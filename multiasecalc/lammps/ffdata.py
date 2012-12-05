@@ -32,7 +32,6 @@ class FFData:
 
 	def get(self, group, type):
 		groupdict = getattr(self, group)
-		type = self.get_actual_type(group, type)
 		return groupdict[type]
 		
 	def available_tables(self, group):
@@ -43,16 +42,20 @@ class FFData:
 	
 	def get_actual_type(self, group, type):
 		if not self.equivalence: return type
-		if group == 'atom':
-			return self.equivalence[type]['atom']
-		elif type.__class__ == SequenceType:
-			actuals = [self.equivalence[tp][group] for tp in type.atom_types]
-			return SequenceType(actuals)
-		else:
-			central, others = type.get_types()
-			act_central = self.equivalence[central]['improper']
-			act_others = [self.equivalence[tp]['improper'] for tp in others]
-			return ImproperType(central_type=act_central, other_types=act_others)
+		try:
+			if group == 'atom':
+				return self.equivalence[type]['atom']
+			elif type.__class__ == SequenceType:
+				actuals = [self.equivalence[tp][group] for tp in type.atom_types]
+				return SequenceType(actuals)
+			else:
+				central, others = type.get_types()
+				act_central = self.equivalence[central]['improper']
+				act_others = [self.equivalence[tp]['improper'] for tp in others]
+				return ImproperType(central_type=act_central, other_types=act_others)
+		except KeyError:
+			# Silently ignore
+			return type
 
 class SequenceType:
 	def __init__(self, atom_types):
@@ -73,11 +76,11 @@ class ImproperType:
 			self.central = central_type
 			self.others = sorted(other_types)
 		elif class2:
+			self.central =  atom_types[1]
+			self.others = sorted([atom_types[0], atom_types[2], atom_types[3]])
+		else:
 			self.central = atom_types[0]
 			self.others = sorted(atom_types[1:])
-		else:
-			self.central =  atom_types[1]
-			self.others = sorted([atom_types[0]]+atom_types[2:])
 	def get_types(self):
 		return self.central, self.others
 	def __eq__(self, other):

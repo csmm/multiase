@@ -95,7 +95,7 @@ class LAMMPS_NVT(LAMMPSMolecularDynamics):
 
 class LAMMPS_NPT(LAMMPSMolecularDynamics):
 	""" Constant temperature and pressure calculations with Nose-Hoover """
-	def __init__(self, atoms, timestep, temperature, externalstress, t_damp=100*units.fs, p_damp=1000*units.fs, ramp_to_temp=None, **kwargs):
+	def __init__(self, atoms, timestep, temperature, externalstress, isotropic=True, t_damp=100*units.fs, p_damp=1000*units.fs, ramp_to_temp=None, **kwargs):
 		LAMMPSMolecularDynamics.__init__(self, atoms, timestep, **kwargs)
 			
 		pressure = atoms.calc.from_ase_units(externalstress, 'pressure')
@@ -104,13 +104,15 @@ class LAMMPS_NPT(LAMMPSMolecularDynamics):
 		
 		if not ramp_to_temp: ramp_to_temp = temperature
 		
-		if (np.dot(atoms.cell, atoms.cell) == atoms.cell**2).all():
-			# orthogonal
+		if isotropic:
+			coupling = 'iso'
+		elif (np.dot(atoms.cell, atoms.cell) == atoms.cell**2).all():
+			# orthogonal cell
 			coupling = 'aniso'
 		else:
 			coupling = 'tri'
 				
-		self.fix = 'npt temp %f %f %f %s %f %f %f nreset 1000' %(temperature, ramp_to_temp, t_damp, coupling, pressure, pressure, p_damp)
+		self.fix = 'npt temp %f %f %f %s %f %f %f' %(temperature, ramp_to_temp, t_damp, coupling, pressure, pressure, p_damp)
 		self.cell_relaxed = True
 
 class Constraint2:

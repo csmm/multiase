@@ -143,15 +143,13 @@ def read(infile):
 	aa_dihedrals = set()
 	for types, values in iterateTable(table, 'OOP'):
 		aaCoeffs[ (types[1], types[2], (types[0], types[3])) ] = values[0]
-		aa_dihedrals.add(ImproperType(types, class2=True))
+		aa_dihedrals.add(ImproperType(atom_types=types, class2=True))
 
 	for type in aa_dihedrals:
 		j, (i, k, l) = type.get_types()
 		
 		key1 = (j, k, (i, l))
-		if not key1 in aaCoeffs:
-			key1 = (j, i, (l, i))
-			if not key1 in aaCoeffs: continue
+		if not key1 in aaCoeffs: key1 = (j, i, (l, i))
 		M1 = aaCoeffs.get(key1)
 		
 		key2 = (j, i, (k, l))

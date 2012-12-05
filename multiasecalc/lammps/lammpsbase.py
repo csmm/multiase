@@ -170,7 +170,8 @@ class LAMMPSBase(Calculator):
 		return self.to_ase_units(np.array(stress), 'stress')  
 	
 	def calculation_required(self, atoms, quantities=None):
-		return atoms != self.atoms_after_last_calc
+		return atoms != self.atoms_after_last_calc or \
+			(atoms.get_charges() != self.atoms_after_last_calc.get_charges()).any()
 		
 	def update(self, atoms):
 		if not self.calculation_required(atoms): return
@@ -355,20 +356,22 @@ class LAMMPSBase(Calculator):
 			new_tables = {}
 			for type in used_types:
 				try:
-					actual_type = ff_data.get_actual_type(param_group, type)
-					params = ff_data.get(param_group, actual_type)
+					params = ff_data.get(param_group, type)
 				except KeyError:
-					if warn_missing: print 'No parameters for %s!' % actual_type
+					if warn_missing: print 'No parameters for %s!' % type
 					continue
-				typeorder.append(actual_type)
+				typeorder.append(type)
 				
 				for title, ncols in available_tables:
 					try:
 						values = params[title]
 					except KeyError:
-						if warn_missing: print 'No %s for %s!' % (title, actual_type)
+						if warn_missing: print 'No %s for %s!' % (title, type)
 						values = [0]*ncols
 					table = new_tables.setdefault(title, [])
+					if self.debug:
+						comment = '       # %s' % type
+						values += [comment]
 					table.append(values)
 			tables.extend(new_tables.items())
 			return typeorder
@@ -393,6 +396,9 @@ class LAMMPSBase(Calculator):
 		positions = self.prism.vector_to_lammps(self.atoms.positions)
 		positions = self.from_ase_units(positions, 'distance')
 		columns = [atom_typeids, charges, positions[:,0], positions[:,1], positions[:,2]]
+		if self.debug:
+			comments = ['   # %s' % tp for tp in atom_types]
+			columns += [comments]
 		
 		if self.parameters.atom_style == 'full':
 			columns.insert(0, ['1']*len(self.atoms))
@@ -411,7 +417,11 @@ class LAMMPSBase(Calculator):
 					continue
 				typeid = typeorder.index(obj['type'])+1
 				atoms = [idx+1 for idx in obj['indices']]
-				table.append([typeid] + atoms)
+				values = [typeid] + atoms
+				if self.debug:
+					comment = '    # %s' % obj['type']
+					values += [comment]
+				table.append(values)
 				used_objects.append(obj)
 			tables.append((title, table))
 			return used_objects
