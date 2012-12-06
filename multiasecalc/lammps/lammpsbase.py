@@ -308,6 +308,8 @@ class LAMMPSBase(Calculator):
 		
 		atom_types = self.atom_types(atoms)
 		atom_typeorder = list(set(atom_types))
+		atom_actualtypes = [ff_data.get_actual_type('atom', tp) for tp in atom_types]
+		atom_actualtype_order = [ff_data.get_actual_type('atom', tp) for tp in atom_typeorder]
 		
 		b = atoms.info['bonds']
 		bonds = []
@@ -377,12 +379,11 @@ class LAMMPSBase(Calculator):
 			return typeorder
 		
 		# Add masses to ff_data
-		masses = dict(zip(atom_types, self.atoms.get_masses()))
-		for type in atom_typeorder:
-			actual_type = ff_data.get_actual_type('atom', type)
-			ff_data.add('atom', actual_type, 'Masses', [masses[type]])
+		masses = dict(zip(atom_actualtypes, self.atoms.get_masses()))
+		for type in atom_actualtype_order:
+			ff_data.add('atom', type, 'Masses', [masses[type]])
 			
-		add_coeff_tables('atom', atom_types, atom_typeorder)
+		add_coeff_tables('atom', atom_actualtypes, atom_actualtype_order)
 		
 		bond_typeorder     = add_coeff_tables('bond', bonds, warn_missing=self.debug)
 		angle_typeorder    = add_coeff_tables('angle', angles, warn_missing=self.debug)
@@ -391,7 +392,7 @@ class LAMMPSBase(Calculator):
 		
 		# Atoms
 		self.set_charges(atoms, atom_types)
-		atom_typeids = [atom_typeorder.index(at)+1 for at in atom_types]
+		atom_typeids = [atom_actualtype_order.index(at)+1 for at in atom_actualtypes]
 		charges = self.atoms.get_charges()
 		positions = self.prism.vector_to_lammps(self.atoms.positions)
 		positions = self.from_ase_units(positions, 'distance')

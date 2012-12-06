@@ -7,11 +7,15 @@ import os
 
 class OPLSAA(LAMMPSBase):
 	
-	def __init__(self, gromacs_dir, label='opls-aa', pair_cutoff=10.0, **kwargs):
+	def __init__(self, gromacs_dir, label='opls-aa', pair_cutoff=10.0, kspace=False, **kwargs):
 		LAMMPSBase.__init__(self, label, **kwargs)
 		
 		self.parameters.units          = 'real'
-		self.parameters.pair_style     = 'lj/cut/coul/cut %f' % pair_cutoff
+		if kspace:
+			self.parameters.pair_style     = 'lj/cut/coul/long %f' % pair_cutoff
+			self.parameters.kspace_style   = 'ewald 0.0001'
+		else:
+			self.parameters.pair_style     = 'lj/cut/coul/cut %f' % pair_cutoff
 		self.parameters.pair_modify    = 'mix geometric'
 		self.parameters.bond_style     = 'harmonic'
 		self.parameters.angle_style    = 'harmonic'

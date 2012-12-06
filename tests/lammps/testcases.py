@@ -1,6 +1,7 @@
 from ase.data import s22
 from multiasecalc.lammps import COMPASS, CHARMM, OPLSAA, ReaxFF
 from multiasecalc.lammps.amber import AMBER
+from multiasecalc.lammps.pcff import PCFF
 from multiasecalc.utils import get_datafile
 from scripts import charmm_charges
 import unittest
@@ -46,6 +47,44 @@ class PhenolDimerForces(unittest.TestCase):
 		self.assertTrue(floatEqual(atoms.get_potential_energy(), correct_potential_energy))
 		self.assertTrue(floatEqual(atoms.get_forces(), correct_forces))
 
+	def test_pcff(self):
+		atoms = s22.create_s22_system('Phenol_dimer')
+		atoms.calc = PCFF(get_datafile('pcff.frc'), debug=True)
+		
+		#print repr(atoms.get_potential_energy())
+		#print repr(atoms.get_forces())
+	
+		correct_potential_energy = 0.7130231849564879
+		correct_forces = np.array([[-0.71480519, -1.28329556,  0.3645104 ],
+			[ 0.04967878, -0.53716414,  0.49471069],
+			[ 0.09348   , -0.01534812, -0.11906482],
+			[-2.07445626, -0.11390926, -1.20787238],
+			[-0.73966583,  1.86485154, -1.60159241],
+			[ 1.21229552,  2.20360757, -0.57839907],
+			[ 2.11963298,  0.62748723,  0.92173001],
+			[ 0.59810805, -1.88464291,  1.5234026 ],
+			[ 0.2852521 , -0.02439179,  0.19036841],
+			[ 0.21954811, -0.42473057,  0.39414587],
+			[-0.30727326, -0.52418093,  0.12873631],
+			[-0.54397664, -0.1358207 , -0.25838934],
+			[-0.28241305,  0.18535075, -0.29207718],
+			[ 0.74483483, -0.79010695,  0.09408319],
+			[ 0.13857866, -0.40611826, -0.10415103],
+			[ 0.10965914,  0.09524275,  0.06383066],
+			[ 2.17505664, -1.402304  ,  1.00164572],
+			[ 0.51156198,  1.50225392,  1.84722837],
+			[-1.15981628,  2.13178794,  0.66768576],
+			[-2.07635995,  1.10578461, -1.19006274],
+			[-0.82277313, -1.1263999 , -1.88925685],
+			[-0.30276903, -0.00466359, -0.32949953],
+			[-0.17988384, -0.35523179, -0.50759416],
+			[ 0.28890336, -0.54238952, -0.17925419],
+			[ 0.49949809, -0.24680245,  0.3101431 ],
+			[ 0.15809251,  0.10113549,  0.2549922 ]])
+		
+		self.assertTrue(floatEqual(atoms.get_potential_energy(), correct_potential_energy))
+		self.assertTrue(floatEqual(atoms.get_forces(), correct_forces))
+		
 	def test_charmm(self):
 		atoms = s22.create_s22_system('Phenol_dimer')
 		atoms.calc = CHARMM(get_datafile('par_all36_cgenff.prm'), auto_charges=True, debug=True)

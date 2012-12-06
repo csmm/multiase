@@ -29,7 +29,13 @@ def read(infile):
 
 	it = fileIterator(infile)
 	
-	tables = dict(it)
+	#tables = dict(it)
+	# This is a hack... In pcff.frc the wilson_out_of_plane table comes twice, and
+	# on the second time it for cff91_auto. We want to ignore that.
+	tables = {}
+	for title, table in it:
+		if title not in tables:
+			tables[title] = table
 	
 	# **** Equivalence ****
 	table = tables['equivalence']
