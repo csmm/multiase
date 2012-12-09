@@ -13,7 +13,7 @@ def distance_geometry(mol, bond_matrix, unit_indices, characteristic_ratio=8.3):
 	N = len(mol)
 	
 	BOND_LENGTH = 1.6
-	BOND_ANGLE = 120.0*np.pi/180
+	BOND_ANGLE = 113*np.pi/180
 	DIST_1_3 = BOND_LENGTH * sqrt(2 - 2*cos(BOND_ANGLE))
 	MIN_DIST_1_4 = BOND_LENGTH * (1 + 2*cos(pi-BOND_ANGLE))
 	MAX_DIST_1_4 = 2 * sqrt(BOND_LENGTH**2 + (BOND_LENGTH/2)**2 - 2 * BOND_LENGTH**2 /2 * cos(BOND_ANGLE))
@@ -51,10 +51,8 @@ def distance_geometry(mol, bond_matrix, unit_indices, characteristic_ratio=8.3):
 	
 	print 'Generate coarse chain'
 	N_monomers = len(mol[unit_indices])
-	R2 = characteristic_ratio*DIST_1_3*N_monomers
-	R_max = N_monomers*DIST_1_3
-	kuhn_length = R2/R_max
-	N_coarse = int(R_max / kuhn_length)
+	kuhn_length = BOND_LENGTH * characteristic_ratio / cos(BOND_ANGLE/2)
+	N_coarse = N_monomers * cos(BOND_ANGLE/2)**2 / characteristic_ratio
 	coarse_segment_units = int(N_monomers/N_coarse)
 	print 'Coarse chain length:', N_coarse
 	print 'kuhn length =', kuhn_length
@@ -63,7 +61,9 @@ def distance_geometry(mol, bond_matrix, unit_indices, characteristic_ratio=8.3):
 	coarse_indices = slice(unit_indices.start, None, unit_indices.step*coarse_segment_units)
 	D_coarse = D[coarse_indices, coarse_indices]
 	r_mean = kuhn_length
-	D[coarse_indices, coarse_indices] = gaussian_chain(D_coarse, r_mean)
+	gaussian_matrix = gaussian_chain(D_coarse, r_mean)
+	print gaussian_matrix
+	D[coarse_indices, coarse_indices] = gaussian_matrix
 	
 	triangle_smooth(D)
 	
@@ -88,7 +88,7 @@ def distance_geometry(mol, bond_matrix, unit_indices, characteristic_ratio=8.3):
 	descending_order = np.argsort(evals)[::-1]
 	evals = evals[descending_order]
 	evecs = evecs[:,descending_order]
-	print evals
+	#print evals
 	#print 'Eigenvectors'
 	#print evecs
 	

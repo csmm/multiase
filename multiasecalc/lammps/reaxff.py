@@ -34,9 +34,11 @@ class ReaxFF(LAMMPSBase):
 		else:
 			self.specorder = specorder
 		
-		self.use_ff_file(ff_file_path, 'ffield.reax')
+		self.ff_file = ff_file_path
+		self.ff_data = FFData()
 		
 		self.save_bond_orders = save_bond_orders
+		"""
 		if save_bond_orders:
 			self.bondinfo_file = NamedTemporaryFile(mode='r', prefix='bonds_'+label,
 									dir=self.tmp_dir, delete=(not self.keep_tmp_files))
@@ -48,13 +50,7 @@ class ReaxFF(LAMMPSBase):
 			self.parameters.extra_cmds += ['variable %s equal c_reax[%i]' % (et, i+1) for i, et in enumerate(energy_terms)]
 			
 			self._custom_thermo_args += ['v_%s' % et for et in energy_terms]
-			
-		self.ff_data = FFData()
-	
-	def use_ff_file(self, filepath, target_filename=None):
-		if not target_filename: 
-			target_filename=os.path.split(filepath)[1]
-		shutil.copy(filepath, os.path.join(self.tmp_dir, target_filename))    
+		"""
 	
 	def atom_types(self, atoms):
 		return atoms.get_chemical_symbols()
@@ -62,18 +58,18 @@ class ReaxFF(LAMMPSBase):
 	def prepare_calculation(self, atoms, data):
 		typeorder = data.atom_typeorder
 		element_indices = [str(self.specorder.index(el)+1) for el in typeorder]
-		self.parameters.pair_coeffs = ['* * ffield.reax '+' '.join(element_indices)]
+		self.parameters.pair_coeffs = ['* * %s ' % (self.ff_file) + ' '.join(element_indices)]
 	
 	
 	def set_dumpfreq(self, freq):
 		LAMMPSBase.set_dumpfreq(self, freq)
-		if self.save_bond_orders:
-			self.lammps_input.write('fix bondinfo all reax/bonds %s %s\n' % (freq, self.bondinfo_file.name))
+		#if self.save_bond_orders:
+		#	self.lammps_input.write('fix bondinfo all reax/bonds %s %s\n' % (freq, self.bondinfo_file.name))
 	
 	def read_lammps_trj(self, *args, **kwargs):
 		LAMMPSBase.read_lammps_trj(self, *args, **kwargs)
-		if self.save_bond_orders:
-			self.read_bondinfo()
+		#if self.save_bond_orders:
+		#	self.read_bondinfo()
 		
 	def read_bondinfo(self):
 		f = self.bondinfo_file

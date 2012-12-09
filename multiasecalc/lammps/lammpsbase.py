@@ -111,9 +111,9 @@ class LAMMPSBase(Calculator):
 		self.atoms_after_last_calc = None
 		self.update_charges = update_charges
 		self.keep_alive = keep_alive
-		self.lammps_command = lammps_command
 		self.debug = debug           
-		self.lammps_process = LammpsProcess(log=debug)
+		self.lammps_process = LammpsProcess(log=debug, lammps_command=lammps_command)
+		#self.lammps_process = LammpsLibrary(log=debug)
 		self.calls = 0
 		
 		self._custom_thermo_args = [
@@ -246,7 +246,7 @@ class LAMMPSBase(Calculator):
 		filelabel = self.prepare_lammps_io()
 		
 		if not self.lammps_process.running():
-			self.lammps_process.start(self.tmp_dir, self.lammps_command, filelabel)
+			self.lammps_process.start(self.tmp_dir, filelabel)
 				
 		if np.all(atoms.pbc == False):
 			# Make sure the atoms are inside the cell
@@ -590,25 +590,69 @@ class LAMMPSBase(Calculator):
 	def from_ase_units(self, value, quantity):
 		return unitconversion.convert(value, quantity, 'ASE', self.parameters.units)
 
+from lammpspython import lammps
 
+class LammpsLibrary:
+	def __init__(self, log=False):
+		self.lammps = None
+		self.inlog = None
+		self.log = log
+	
+	def start(self, tmp_dir, filelabel=''):
+		if self.lammps: self.lammps.close()
+		self.lammps = lammps.lammps()#cmdargs=['-screen', 'none'])
+		
+		if self.log == True:
+			# Save LAMMPS input and output for reference
+			
+			# in python 2.4 the delete=False option doesn't exist
+			#self.inlog  = NamedTemporaryFile(prefix='in_'+filelabel, dir=tmp_dir, delete=False)
+			self.inlog  = open(os.path.join(tmp_dir, 'in_'+filelabel), 'w')
+
+	def running(self):
+		return self.lammps != None
+	
+	def poll(self):
+		return None
+	
+	def terminate(self):
+		pass
+		
+	def write(self, command):
+		if self.inlog: self.inlog.write(command)
+		self.lammps.command(command)
+		
+	def flush(self): pass
+	
+	def close_logs(self):
+		if self.inlog: self.inlog.close()
+		self.inlog = None
+		
+	def get_thermo(self, key):
+		return self.lammps.extract_compute('thermo_%s' % key, 0, 0)
+		
+	def read_lammps_output(self): pass
+	
+	
 class LammpsProcess:
 	""" A class to handle the lammps process and read thermo output. There are
 		sometimes errors related to the communication with the process and it
 		is advisable to restart lammps after every calculation.
 	"""
-	def __init__(self, log=False):
+	def __init__(self, log=False, lammps_command=None):
 		self.inlog = None
 		self.outlog = None
 		self.proc = None
 		self.log = log
-		
+		self.lammps_command = lammps_command
 		
 		self.thermo_output = []
 		
 	def __del__(self):
 		if self.running(): self.proc.terminate()
 		
-	def invoke_lammps(self, tmp_dir, lammps_command, filelabel):
+	def invoke_lammps(self, tmp_dir, filelabel):
+		lammps_command = self.lammps_command
 		if not lammps_command:
 			lammps_command = os.environ.get('LAMMPS_COMMAND')
 		if not lammps_command or len(lammps_command.strip()) == 0:
@@ -619,7 +663,7 @@ class LammpsProcess:
 		# Make sure we execute using the absolute path              
 		lammps_cmd_line[0] = os.path.abspath(lammps_cmd_line[0])
 		
-		lammps_cmd_line += ['-log', '/dev/null']
+		lammps_cmd_line += ['-log', 'none'] #, '-screen', 'none']
 		
 		if self.log == True:
 			# Save LAMMPS input and output for reference
@@ -633,9 +677,9 @@ class LammpsProcess:
 		return Popen(lammps_cmd_line,
 							cwd=tmp_dir, stdin=PIPE, stdout=PIPE, stderr=sys.stderr)
 	
-	def start(self, tmp_dir, lammps_command=None, filelabel=''):
+	def start(self, tmp_dir, filelabel=''):
 		if self.running(): self.terminate()
-		self.proc = self.invoke_lammps(tmp_dir, lammps_command, filelabel)
+		self.proc = self.invoke_lammps(tmp_dir, filelabel)
 	
 	def running(self):
 		return self.proc and self.proc.poll() == None
@@ -659,7 +703,7 @@ class LammpsProcess:
 		
 	def flush(self):
 		self.proc.stdin.flush()
-		self.write('log /dev/null\n')
+		#self.write('log none\n')
 		
 	def close_logs(self):
 		if self.inlog: self.inlog.close()

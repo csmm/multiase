@@ -32,7 +32,14 @@ class FFData:
 
 	def get(self, group, type):
 		groupdict = getattr(self, group)
-		return groupdict[type]
+		try:
+			return groupdict[type]
+		except KeyError:
+			# Test for wildcard types like * c c *
+			for key in groupdict:
+				if key.match(type):
+					return groupdict[key]
+			raise
 		
 	def available_tables(self, group):
 		d = {}
@@ -58,11 +65,29 @@ class FFData:
 			return type
 
 class SequenceType:
-	def __init__(self, atom_types):
+	def __init__(self, atom_types, wildcard=None):
 		if atom_types[0] < atom_types[-1]:
 			self.atom_types = list(atom_types)
 		else:
 			self.atom_types = list(reversed(atom_types))
+		if wildcard:
+			for i in range(len(atom_types)):
+				if self.atom_types[i] == wildcard:
+					self.atom_types[i] = None
+		
+	def match(self, other):
+		if not None in self.atom_types: return False
+		match = True
+		for type1, type2 in zip(self.atom_types, other.atom_types):
+			if type1 != None and type1 != type2:
+				match = False
+		if match:
+			return True
+		match = True
+		for type1, type2 in zip(self.atom_types, other.atom_types[::-1]):
+			if type1 != None and type1 != type2:
+				match = False
+		return match
 	def __eq__(self, other):
 		return self.atom_types == other.atom_types
 	def __hash__(self):
@@ -83,6 +108,17 @@ class ImproperType:
 			self.others = sorted(atom_types[1:])
 	def get_types(self):
 		return self.central, self.others
+	def match(self, other):
+		if not None in self.others: return False
+		if self.central != other.central:
+			return False
+		other_copy = list(other.others)
+		for tp in self.others:
+			if tp != None:
+				if other.others.count(tp) < self.others.count(tp):
+					return False
+		return True
+		
 	def __eq__(self, other):
 		return self.central == other.central and self.others == other.others
 	def __hash__(self):

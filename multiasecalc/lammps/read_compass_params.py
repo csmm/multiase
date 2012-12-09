@@ -29,9 +29,9 @@ def read(infile):
 
 	it = fileIterator(infile)
 	
-	#tables = dict(it)
 	# This is a hack... In pcff.frc the wilson_out_of_plane table comes twice, and
-	# on the second time it for cff91_auto. We want to ignore that.
+	# on the second time it's for cff91_auto. We want to ignore that.
+	#tables = dict(it)
 	tables = {}
 	for title, table in it:
 		if title not in tables:
@@ -48,7 +48,6 @@ def read(infile):
 		nAtomTypes = dict(NonB=1, Bond=2, Angle=3, Torsion=4, OOP=4)[category]
 		for line in data.splitlines():
 			row = line.split()
-			if '*' in row: continue # Ignore these for now
 			actual_types = tuple(row[2:2+nAtomTypes])
 			values = [float(val) for val in row[2+nAtomTypes:]]
 			yield actual_types, values
@@ -105,7 +104,7 @@ def read(infile):
 	# **** Torsion coeffs ****
 	table = tables['torsion_3']
 	for types, values in iterateTable(table, 'Torsion'):
-		ff_data.add('dihedral', SequenceType(types), 'Dihedral Coeffs', values)
+		ff_data.add('dihedral', SequenceType(types, wildcard='*'), 'Dihedral Coeffs', values)
 
 	# **** End bond/torsion ***
 	table = tables['end_bond-torsion_3']
