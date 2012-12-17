@@ -110,8 +110,11 @@ class Bonds:
 	
 	def find_dihedrals(self):
 		dihedrals = []
-		for j in range(self.len_atoms):
-			for i, k in permutations(self[j], 2):
+		sets = list()
+		for j, k in self.pairs:
+			for i in self[j]:
+				if i == k:
+					continue
 				for l in self[k]:
 					if l != j:
 						dihedrals.append((i,j,k,l))

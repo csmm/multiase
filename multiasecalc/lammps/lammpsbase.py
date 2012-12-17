@@ -8,6 +8,7 @@ import unitconversion
 from bonds import Bonds
 from ffdata import FFData, SequenceType, ImproperType
 from multiasecalc.lammps.io.lammps import read_lammps_dump
+import warnings
 
 try:
 	from itertools import combinations, permutations
@@ -144,7 +145,7 @@ class LAMMPSBase(Calculator):
 	
 	def atom_types(self, atoms):
 		""" Implement this method in subclasses"""
-		raise NotImplementedException()
+		raise NotImplementedError()
 	
 	def set_charges(self, atoms, atom_types):
 		""" Implement this method in subclasses if needed"""
@@ -311,39 +312,35 @@ class LAMMPSBase(Calculator):
 		atom_actualtypes = [ff_data.get_actual_type('atom', tp) for tp in atom_types]
 		atom_actualtype_order = [ff_data.get_actual_type('atom', tp) for tp in atom_typeorder]
 		
-		b = atoms.info['bonds']
-		bonds = []
-		if self.parameters.bond_style:
-			for indices in b:
-				type = SequenceType([atom_types[i] for i in indices])
-				actual_type = ff_data.get_actual_type('bond', type)
-				bonds.append(dict(indices=indices, type=actual_type))
-			
-		angles = []
-		if self.parameters.angle_style:
-			for indices in b.find_angles():
-				type = SequenceType([atom_types[i] for i in indices])
-				actual_type = ff_data.get_actual_type('angle', type)
-				angles.append(dict(indices=indices, type=actual_type))
-			
-		dihedrals = []
-		if self.parameters.dihedral_style:
-			for indices in b.find_dihedrals():
-				type = SequenceType([atom_types[i] for i in indices])
-				actual_type = ff_data.get_actual_type('dihedral', type)
-				dihedrals.append(dict(indices=indices, type=actual_type))
-		
-		impropers = []
-		if self.parameters.improper_style:
-			for indices in b.find_impropers():
-				if ff_data.class2:
-					j, i, k, l = indices
+		def identify_objects(objects, group):
+			result = []
+			discarded_objects = set()
+			for indices in objects:
+				if group != 'improper':
+					type = SequenceType([atom_types[i] for i in indices])
 				else:
-					i, j, k, l = indices
-				a, c, b, d = (atom_types[ind] for ind in indices)
-				type = ImproperType(central_type=a, other_types=(c,b,d), class2=ff_data.class2)
-				actual_type = ff_data.get_actual_type('improper', type)
-				impropers.append(dict(indices=(i,j,k,l), type=actual_type))
+					a, c, b, d = (atom_types[ind] for ind in indices)
+					type = ImproperType(central_type=a, other_types=(c,b,d))
+					
+				actual_indices, actual_type = ff_data.find(group, indices, type)
+				if actual_indices == None:
+					discarded_objects.add(type)
+					continue
+				if group == 'improper' and ff_data.class2:
+					actual_indices = [actual_indices[1], actual_indices[0], actual_indices[2], actual_indices[3]]
+				result.append(dict(indices=actual_indices, type=actual_type))
+				
+			if self.debug:
+				for tp in discarded_objects:
+					print 'No parameters for %s. Skipping.' % type
+			return result
+		
+		b = atoms.info['bonds']
+		bonds     = identify_objects(b, 'bond')
+		angles    = identify_objects(b.find_angles(), 'angle')
+		dihedrals = identify_objects(b.find_dihedrals(), 'dihedral')
+		impropers = identify_objects(b.find_impropers(), 'improper')
+		
 		
 		# Coeffs	
 		def add_coeff_tables(param_group, objects, typeorder=None, warn_missing=True):
@@ -353,17 +350,10 @@ class LAMMPSBase(Calculator):
 			else:
 				used_types = set(object['type'] for object in objects)
 			
-			typeorder = []
 			available_tables = ff_data.available_tables(param_group)
 			new_tables = {}
 			for type in used_types:
-				try:
-					params = ff_data.get(param_group, type)
-				except KeyError:
-					if warn_missing: print 'No parameters for %s!' % type
-					continue
-				typeorder.append(type)
-				
+				params = ff_data.get_params(param_group, type)
 				for title, ncols in available_tables:
 					try:
 						values = params[title]
@@ -373,10 +363,10 @@ class LAMMPSBase(Calculator):
 					table = new_tables.setdefault(title, [])
 					if self.debug:
 						comment = '       # %s' % type
-						values += [comment]
+						values = values + [comment]
 					table.append(values)
 			tables.extend(new_tables.items())
-			return typeorder
+			return list(used_types)
 		
 		# Add masses to ff_data
 		masses = dict(zip(atom_actualtypes, self.atoms.get_masses()))
@@ -412,10 +402,7 @@ class LAMMPSBase(Calculator):
 		def add_object_table(title, objects, typeorder):
 			if not objects or not typeorder: return
 			table = []
-			used_objects = []
 			for obj in objects:
-				if obj['type'] not in typeorder:
-					continue
 				typeid = typeorder.index(obj['type'])+1
 				atoms = [idx+1 for idx in obj['indices']]
 				values = [typeid] + atoms
@@ -423,14 +410,12 @@ class LAMMPSBase(Calculator):
 					comment = '    # %s' % obj['type']
 					values += [comment]
 				table.append(values)
-				used_objects.append(obj)
 			tables.append((title, table))
-			return used_objects
 		
-		bonds     = add_object_table('Bonds', bonds, bond_typeorder)
-		angles    = add_object_table('Angles', angles, angle_typeorder)
-		dihedrals = add_object_table('Dihedrals', dihedrals, dihedral_typeorder)
-		impropers = add_object_table('Impropers', impropers, improper_typeorder)
+		add_object_table('Bonds', bonds, bond_typeorder)
+		add_object_table('Angles', angles, angle_typeorder)
+		add_object_table('Dihedrals', dihedrals, dihedral_typeorder)
+		add_object_table('Impropers', impropers, improper_typeorder)
 		
 		if self.atoms.has('momenta'):
 			vel = self.prism.vector_to_lammps(self.atoms.get_velocities())
@@ -600,10 +585,10 @@ class LammpsLibrary:
 	
 	def start(self, tmp_dir, filelabel=''):
 		if self.lammps: self.lammps.close()
-		self.lammps = lammps.lammps()#cmdargs=['-screen', 'none'])
+		self.lammps = lammps.lammps(cmdargs=['-screen', 'none'])
 		
 		if self.log == True:
-			# Save LAMMPS input and output for reference
+			# Save LAMMPS input
 			
 			# in python 2.4 the delete=False option doesn't exist
 			#self.inlog  = NamedTemporaryFile(prefix='in_'+filelabel, dir=tmp_dir, delete=False)
@@ -629,6 +614,12 @@ class LammpsLibrary:
 		self.inlog = None
 		
 	def get_thermo(self, key):
+		stress_components = ['pxx','pyy','pzz', 'pyz','pxz','pxy']
+		if key in stress_components:
+			stress = self.lammps.extract_compute('thermo_%s' % key, 0, 2)
+			print stress[0]
+			#return stress[stress_components.index(key)]
+			return None
 		return self.lammps.extract_compute('thermo_%s' % key, 0, 0)
 		
 	def read_lammps_output(self): pass

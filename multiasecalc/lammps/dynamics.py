@@ -104,18 +104,24 @@ class LAMMPS_NPT(LAMMPSMolecularDynamics):
 		
 		if not ramp_to_temp: ramp_to_temp = temperature
 		
-		if isotropic:
-			coupling = 'iso'
-		elif (np.dot(atoms.cell, atoms.cell) == atoms.cell**2).all():
-			# orthogonal cell
-			coupling = 'aniso'
+		pvalues = '%f %f %f' % (pressure, pressure, p_damp)
+		
+		if atoms.pbc.all():
+			if isotropic:
+				coupling = 'iso'
+			elif (np.dot(atoms.cell, atoms.cell) == atoms.cell**2).all():
+				# orthogonal cell
+				coupling = 'aniso'
+			else:
+				coupling = 'tri'
+			args = '%s %s' % (coupling, pvalues)
 		else:
-			coupling = 'tri'
+			args = ' '.join(['%s %s' % ('xyz'[i], pvalues) for i in range(3) if atoms.pbc[i]])
 				
-		self.fix = 'npt temp %f %f %f %s %f %f %f' %(temperature, ramp_to_temp, t_damp, coupling, pressure, pressure, p_damp)
+		self.fix = 'npt temp %f %f %f %s' %(temperature, ramp_to_temp, t_damp, args)
 		self.cell_relaxed = True
 
-class Constraint2:
+class SimpleConstraint:
 	def __init__(self, indices):
 		self.indices = indices
 		
@@ -131,9 +137,12 @@ class Constraint2:
 		cmds.append('fix %s %s %s' % (fixname, groupname, fix))
 		return cmds
 		
-class Spring(Constraint2):
+	def get_fix(self, atoms):
+		raise NotImplementedError()
+		
+class Spring(SimpleConstraint):
 	def __init__(self, indices, point, spring_constant, R0=0.0):
-		Constraint2.__init__(self, indices)
+		SimpleConstraint.__init__(self, indices)
 		self.point = point
 		self.K = spring_constant
 		self.R0 = R0
@@ -142,43 +151,75 @@ class Spring(Constraint2):
 		K = atoms.calc.from_ase_units(self.K, 'force')
 		x, y, z = atoms.calc.prism.vector_to_lammps(self.point)
 		return 'spring tether %f %f %f %f %f' % (K, x, y, z, self.R0)
-		
-class Constraint:
-	def __init__(self):
-		self.groups = []
-		self.fixes = []
-		
-	def new_group(self, atoms):
-		name = 'group%s%s' %(self.__class__.__name__, abs(hash(tuple(atoms))))
-		self.groups.append((name, atoms))
-		return name
-		
-	def get_commands(self, atoms):
-		cmds = []
-		for name, indices in self.groups:
-			indices_str = ' '.join([str(i+1) for i in indices])
-			cmds.append('group %s id %s' % (name, indices_str))
-		for fix in self.fixes:
-			cmds.append(fix)
-		return cmds
-		
-class AddForce(Constraint):
-	def __init__(self, target_atoms, total_force):
-		Constraint.__init__(self)
-		self.target_atoms = target_atoms
+
+class AddForce(SimpleConstraint):
+	def __init__(self, indices, total_force):
+		SimpleConstraint.__init__(self, indices)
 		self.total_force = total_force
-		
-	def get_commands(self, atoms):
-		self.fixes = []
-		self.groups = []
-		
-		groupname = self.new_group(self.target_atoms)
-		fixname = 'addforce%s' % abs(hash(tuple(self.target_atoms)))
-		
-		force = self.total_force / len(self.target_atoms)
+	
+	def get_fix(self, atoms):
+		force = self.total_force / len(self.indices)
+		force = atoms.calc.prism.vector_to_lammps(force)
 		fx, fy, fz = atoms.calc.from_ase_units(force, 'force')
+		return 'addforce %f %f %f' % (fx, fy, fz)
 		
-		self.fixes.append('fix %s %s addforce %s %s %s' % (fixname, groupname, fx, fy, fz))
-		return Constraint.get_commands(self, atoms)
+		
+class LJWall:
+	def __init__(self, face, epsilon, sigma, wall_offset=None, final_wall_offset=None, mixing='arithmetic'):
+		self.face = face
+		self.epsilon = epsilon
+		self.sigma = sigma
+		self.offset = wall_offset
+		self.final_offset = final_wall_offset
+		self.mixing = mixing
+		self.commands = []
+		self.ngroups = 0
+		self.nfixes = 0
+		self.id = '%s%s' % (self.__class__.__name__, abs(hash(epsilon + sigma) + hash(face)))
+		
+		#if 'hi' in face:
+		#	self.offset = -abs(self.offset)
+	
+	def get_commands(self, atoms):
+		ffdata = atoms.calc.ff_data
+		
+		if self.final_offset != None:
+			rampname = 'ramp%s' % self.id
+			self.commands.append('variable %s equal ramp(%f,%f)' % (rampname, self.offset, self.final_offset))
+			coord = 'v_%s' % rampname
+		elif self.offset != None:
+			coord = '%f' % self.offset
+		else:
+			coord = 'EDGE'
+		
+		for tp in atoms.calc.data.atom_typeorder:
+			actual_type = ffdata.get_actual_type('atom', tp)
+			eps, sig = ffdata.get_params('atom', actual_type)['Pair Coeffs']
+			mixeps = np.sqrt(self.epsilon*eps)
+			if self.mixing == 'arithmetic':
+				mixsig = (self.sigma+sig)/2
+			elif self.mixing == 'geometric':
+				mixsig = np.sqrt(self.sigma*sig)
+			else:
+				raise RuntimeError('Invalid mixing type: %s' % self.mixing)
+			typeid = atoms.calc.data.atom_typeorder.index(tp) + 1
+			groupname = self.create_group_by_type(typeid)
+			cutoff = 10.0
+			fixstr = 'wall/lj126 %s %s %f %f %f units box pbc yes' % (self.face, coord, mixeps, mixsig, cutoff)
+			self.create_fix(groupname, fixstr)
+		
+		return self.commands
+
+	def create_group_by_type(self, typeid):
+		groupname = 'group%s%s' % (self.id, typeid)
+		self.commands.append('group %s type %i' % (groupname, typeid))
+		self.ngroups += 1
+		return groupname
+		
+	def create_fix(self, groupname, fixstr):
+		fixname = 'fix%s%i' % (self.id, self.nfixes)
+		self.commands.append('fix %s %s %s' % (fixname, groupname, fixstr))
+		self.nfixes += 1
+		return fixname
 		
 		

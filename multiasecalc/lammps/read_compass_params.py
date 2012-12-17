@@ -1,19 +1,21 @@
 from ffdata import SequenceType, ImproperType, FFData
 import numpy as np
+import re
 
 def fileIterator(infile):
-	import re
+	data  = infile.read()
+	data = re.sub(r'\s*![^\n]*\n', '\n', data)
+	
 	frcTableExp = re.compile(r"""
 		\#(\S+)\s+\w+\s*\n+
 		(?:>[^\n]*\n)*
 		\s*
 		(?:@[^\n]*\n)*
 		\s*
-		(?:![^\n]*\n)*
 		(.+?)\n\n
 		""", re.VERBOSE | re.DOTALL)
 
-	for match in frcTableExp.finditer(infile.read()):
+	for match in frcTableExp.finditer(data):
 		yield match.groups()
 
 
@@ -26,7 +28,19 @@ def read(infile):
 	
 	R0 = {}
 	theta0 = {}
+	
+	def get_R0(pair):
+		for tp in SequenceType(pair).variations():
+			R = R0.get(tp)
+			if R != None: return R
+		#print 'No R0 for %s' % (pair,)
 
+	def get_theta0(triplet):
+		for tp in SequenceType(triplet).variations():
+			th = theta0.get(tp)
+			if th != None: return th
+		#print 'No theta0 for %s' % (triplet,)
+	
 	it = fileIterator(infile)
 	
 	# This is a hack... In pcff.frc the wilson_out_of_plane table comes twice, and
@@ -56,50 +70,57 @@ def read(infile):
 	table = tables['quartic_bond']
 	for atomTypes, values in iterateTable(table, 'Bond'):
 		type = SequenceType(atomTypes)
-		ff_data.bond[type] = {'Bond Coeffs': values}
-		R0[type] = values[0]
+		ff_data.add('bond', type, 'Bond Coeffs', values)
+		R0[atomTypes] = values[0]
 		try:
 			dihedral_type = ff_data.get_actual_type('dihedral', type)
-			R0[dihedral_type] = values[0]
+			if dihedral_type not in R0:
+				R0[dihedral_type] = values[0]
 		except KeyError: pass
 	
 	# **** Angle coeffs ****
 	table = tables['quartic_angle']
-	ff_data.bond['Angle Coeffs'] = {}
 	for atomTypes, values in iterateTable(table, 'Angle'):
 		type = SequenceType(atomTypes)
-		ff_data.angle[type] = {'Angle Coeffs': values}
+		ff_data.add('angle', type, 'Angle Coeffs', values)
 		theta0[type] = values[0]
 		try:
 			improper_type = ff_data.get_actual_type('improper', type)
-			theta0[improper_type] = values[0]
+			if improper_type not in theta0:
+				theta0[improper_type] = values[0]
 		except KeyError: pass
 	 
 	# **** Bond/bond ****
 	table = tables['bond-bond']
 	for types, values in iterateTable(table, 'Angle'):
-		bond1 = SequenceType(types[:2])
-		bond2 = SequenceType(types[1:])
-		if not bond1 in R0 or not bond2 in R0: continue
-		ff_data.add('angle', SequenceType(types), 'BondBond Coeffs', [values[0], R0[bond1], R0[bond2]])
+		R1 = get_R0(types[:2])
+		R2 = get_R0(types[1:])
+		if None in (R1, R2): continue
+		ff_data.add('angle', SequenceType(types), 'BondBond Coeffs', [values[0], R1, R2])
+	
+	# **** Bond/angle ****
+	table = tables['bond-angle']
+	for types, values in iterateTable(table, 'Angle'):
+		R1 = get_R0(types[:2])
+		R2 = get_R0(types[1:])
+		if None in (R1, R2): continue
+		K1 = values[0]
+		K2 = K1
+		if len(values) == 2: K2 = values[1]
+		type = SequenceType(types)
+		ff_data.add('angle', type, 'BondAngle Coeffs', [ K1, K2, R1, R2])
+		if not 'BondBond Coeffs' in ff_data.get_params('angle', type):
+			# In practice LAMMPS uses the R1 and R2 values from BondBond coeffs so we
+			# need to make sure those are given
+			ff_data.add('angle', type, 'BondBond Coeffs', [0.0, R1, R2])
 	
 	# **** Bond/bond 1-3 ***
 	table = tables['bond-bond_1_3']
 	for types, values in iterateTable(table, 'Torsion'):
-		bond1 = SequenceType(types[:2])
-		bond2 = SequenceType(types[2:])
-		if not bond1 in R0 or not bond2 in R0: continue
-		ff_data.add('dihedral', SequenceType(types), 'BondBond13 Coeffs', [values[0], R0[bond1], R0[bond2]])
-		
-	# **** Bond/angle ****
-	table = tables['bond-angle']
-	for types, values in iterateTable(table, 'Angle'):
-		bond1 = SequenceType(types[:2])
-		bond2 = SequenceType(types[1:])
-		if not bond1 in R0 or not bond2 in R0: continue
-		K2 = 0
-		if len(values) == 2: K2 = values[1]
-		ff_data.add('angle', SequenceType(types), 'BondAngle Coeffs', [ values[0], K2, R0[bond1], R0[bond2]])
+		R1 = get_R0(types[:2])
+		R2 = get_R0(types[2:])
+		if None in (R1, R2): continue
+		ff_data.add('dihedral', SequenceType(types), 'BondBond13 Coeffs', [values[0], R1, R2])
 
 	# **** Torsion coeffs ****
 	table = tables['torsion_3']
@@ -109,31 +130,31 @@ def read(infile):
 	# **** End bond/torsion ***
 	table = tables['end_bond-torsion_3']
 	for types, values in iterateTable(table, 'Torsion'):
-		bond1 = SequenceType(types[:2])
-		bond2 = SequenceType(types[2:])
-		if not bond1 in R0 or not bond2 in R0: continue
+		R1 = get_R0(types[:2])
+		R2 = get_R0(types[2:])
+		if None in (R1, R2): continue
 		B = values[:3]
 		C = B
 		if len(values) > 3: C = values[3:]
-		ff_data.add('dihedral', SequenceType(types), 'EndBondTorsion Coeffs',  B + C + [R0[bond1], R0[bond2]])
+		ff_data.add('dihedral', SequenceType(types), 'EndBondTorsion Coeffs',  B + C + [R1, R2])
 	
 	# **** Middle bond/torsion ****
 	table = tables['middle_bond-torsion_3']
 	for types, values in iterateTable(table, 'Torsion'):
-		bond2 = SequenceType(types[1:3])
-		if not bond2 in R0: continue
-		ff_data.add('dihedral', SequenceType(types), 'MiddleBondTorsion Coeffs', values + [R0[bond2]])
+		R2 = get_R0(types[1:3])
+		if not R2: continue
+		ff_data.add('dihedral', SequenceType(types), 'MiddleBondTorsion Coeffs', values + [R2])
 		
 	# **** Angle/torsion ****
 	table = tables['angle-torsion_3']
 	for types, values in iterateTable(table, 'Torsion'):
-		angle1 = SequenceType(types[:3])
-		angle2 = SequenceType(types[1:])
-		if not angle1 in theta0 or not angle2 in theta0: continue
+		theta1 = get_theta0(types[:3])
+		theta2 = get_theta0(types[1:])
+		if None in (theta1, theta2): continue
 		D  = values[:3]
 		E = D
 		if len(values) > 3: E = values[3:]
-		ff_data.add('dihedral', SequenceType(types), 'AngleTorsion Coeffs', D + E + [theta0[angle1], theta0[angle2]])
+		ff_data.add('dihedral', SequenceType(types), 'AngleTorsion Coeffs', D + E + [theta1, theta2])
 		
 	
 	# **** Wilson out of plane ****
@@ -151,10 +172,14 @@ def read(infile):
 		aa_dihedrals.add(ImproperType(atom_types=types, class2=True))
 
 	for type in aa_dihedrals:
+		ind, actual_type = ff_data.find('improper', range(4), type)
+		if actual_type:
+			type = actual_type
+		
 		j, (i, k, l) = type.get_types()
 		
 		key1 = (j, k, (i, l))
-		if not key1 in aaCoeffs: key1 = (j, i, (l, i))
+		if not key1 in aaCoeffs: key1 = (j, k, (l, i))
 		M1 = aaCoeffs.get(key1)
 		
 		key2 = (j, i, (k, l))
@@ -166,12 +191,12 @@ def read(infile):
 		M3 = aaCoeffs.get(key3)
 		
 		if None in (M1, M2, M3):
-			print 'Angle-angle: not all combinations found for', i, j, k, l
+			#print 'Angle-angle: not all combinations found for', i, j, k, l
 			continue
 		
-		th1 = theta0.get(SequenceType([i,j,k]))
-		th2 = theta0.get(SequenceType([i,j,l]))
-		th3 = theta0.get(SequenceType([k,j,l]))
+		th1 = get_theta0([i,j,k])
+		th2 = get_theta0([i,j,l])
+		th3 = get_theta0([k,j,l])
 		if None in (th1, th2, th3): continue
 		ff_data.add('improper', type, 'AngleAngle Coeffs', [M1, M2, M3, th1, th2, th3])
 		
@@ -179,10 +204,10 @@ def read(infile):
 	# ****** angle/angle/torsion ******
 	table = tables['angle-angle-torsion_1']
 	for types, values in iterateTable(table, 'Torsion'):
-		angle1 = SequenceType(types[:3])
-		angle2 = SequenceType(types[1:])
-		if not angle1 in theta0 or not angle2 in theta0: continue
-		v = [values[0], theta0[angle1], theta0[angle2]]
+		theta1 = get_theta0(types[:3])
+		theta2 = get_theta0(types[1:])
+		if None in (theta1, theta2): continue
+		v = [values[0], theta1, theta2]
 		ff_data.add('dihedral', SequenceType(types), 'AngleAngleTorsion Coeffs', v)
 
 	# ****** nonbonded ******

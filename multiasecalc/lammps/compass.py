@@ -5,7 +5,7 @@ import typing, compasstypes
 
 class COMPASS(LAMMPSBase):
 	
-	def __init__(self, ff_file_path, label='compass', pair_cutoff=10.0, kspace=False, **kwargs):
+	def __init__(self, ff_file_path, label='compass', pair_cutoff=9.5, kspace=False, **kwargs):
 		LAMMPSBase.__init__(self, label, **kwargs)
 		
 		self.parameters.units          = 'real'
