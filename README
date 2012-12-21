@@ -39,13 +39,12 @@ Download LAMMPS source code from http://lammps.sandia.gov/download.html
 
   cd lammps-$VERSION/src
   make yes-USER-REAXC
-  make serial
 
-Now copy the resulting lmp_serial binary to a directory in your path. A nice
+Compile in parallel following lammps instructions. Now copy the resulting lmp_machine binary to a directory in your path. A nice
 location might be $HOME/bin.
 
 The ASE LAMMPS interface requires the following to be set::
-  export LAMMPS_COMMAND=$HOME/bin/lmp_serial
+  export LAMMPS_COMMAND=$HOME/bin/lmp_machine
 
 Please adjust according to where you put the lammps binary.
 
