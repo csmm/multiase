@@ -99,8 +99,9 @@ class LAMMPSData:
 class LAMMPSBase(Calculator):
 
 	def __init__(self, label='lammps', tmp_dir=None, parameters={}, 
-				update_charges = False, lammps_command=None,
-				keep_alive=False, debug=False):
+		     update_charges = False, lammps_command=None,
+		     keep_alive=False, debug=False,
+		     output_hack=False):
 		"""The LAMMPS calculators object """
 
 		self.label = label
@@ -113,7 +114,7 @@ class LAMMPSBase(Calculator):
 		self.update_charges = update_charges
 		self.keep_alive = keep_alive
 		self.debug = debug           
-		self.lammps_process = LammpsProcess(log=debug, lammps_command=lammps_command)
+		self.lammps_process = LammpsProcess(log=debug, lammps_command=lammps_command, output_hack=output_hack)
 		#self.lammps_process = LammpsLibrary(log=debug)
 		self.calls = 0
 		
@@ -630,7 +631,8 @@ class LammpsProcess:
 		sometimes errors related to the communication with the process and it
 		is advisable to restart lammps after every calculation.
 	"""
-	def __init__(self, log=False, lammps_command=None):
+        def __init__(self, log=False, lammps_command=None, 
+		     output_hack=False):
 		self.inlog = None
 		self.outlog = None
 		self.proc = None
@@ -638,7 +640,7 @@ class LammpsProcess:
 		self.lammps_command = lammps_command
 		
 		self.thermo_output = []
-		
+		self.output_hack=output_hack
 	def __del__(self):
 		if self.running(): self.proc.terminate()
 		
@@ -654,8 +656,10 @@ class LammpsProcess:
 		# Make sure we execute using the absolute path              
 		lammps_cmd_line[0] = os.path.abspath(lammps_cmd_line[0])
 		
-		lammps_cmd_line += ['-log', 'none'] #, '-screen', 'none']
-		
+		if self.output_hack:
+			lammps_cmd_line += ['-log', '/dev/stdout'] #old fix
+		else:
+			lammps_cmd_line += ['-log', 'none'] #, '-screen', 'none'] 
 		if self.log == True:
 			# Save LAMMPS input and output for reference
 			
@@ -694,6 +698,8 @@ class LammpsProcess:
 		
 	def flush(self):
 		self.proc.stdin.flush()
+		if self.output_hack:
+			self.write('log /dev/stdout\n')
 		#self.write('log none\n')
 		
 	def close_logs(self):
