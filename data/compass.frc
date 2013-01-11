@@ -908,7 +908,8 @@
  1.0   7     o2s        3.3000      0.0960
  1.1   8     c4o        3.8700      0.0748
  1.1   8     c41o       3.8700      0.1080
- 1.1   8     c43o       3.6700      0.0498
+! 1.1   8     c43o       3.6700      0.0498
+ 1.2   10    c43o       3.8150      0.0680
  1.0   9     c4z        3.6500      0.0800
  1.0   9     n1z        3.5200      0.0850
  1.0   9     n2t        3.3000      0.0500
@@ -1382,3 +1383,8 @@ Parameters for aliphatic azides from J. Comput. Chem. 25, 61-71 (2004)
 @Author tester
 @Date 02-Jul-09
 Ref 2 missing -C-Si- params; assume values from Macromols 28, 701-712 (1995) (see pcff)
+
+#reference 11
+@Author Tuukka Verho
+@Date 17-Dec-12
+According to test calculations with Materials Studio, the parameters used for c43o seem to be the ones given for c4o in ref 3.

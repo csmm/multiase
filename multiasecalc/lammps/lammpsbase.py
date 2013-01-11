@@ -229,7 +229,6 @@ class LAMMPSBase(Calculator):
 			self.lammps_process.read_lammps_output()
 			self.read_lammps_trj(update_positions=True, update_cell=update_cell)
 			
-			self.atoms_after_last_calc = atoms
 			cur_step += nsteps
 			
 		self.close_calculation()
@@ -563,10 +562,10 @@ class LAMMPSBase(Calculator):
 			if update_cell:
 				self.atoms.set_cell(self.prism.vector_to_ase(dump.cell))
 				
-		self.atoms_after_last_calc = self.atoms.copy()
-			
 		if self.update_charges:
 			self.atoms.set_charges(dump.get_charges())
+			
+		self.atoms_after_last_calc = self.atoms.copy()
 	
 	
 	def to_ase_units(self, value, quantity):
@@ -694,6 +693,7 @@ class LammpsProcess:
 		
 	def flush(self):
 		self.proc.stdin.flush()
+		if self.inlog: self.inlog.flush()
 		#self.write('log none\n')
 		
 	def close_logs(self):

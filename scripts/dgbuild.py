@@ -75,9 +75,10 @@ def distance_geometry(mol, bond_matrix, unit_indices, characteristic_ratio=8.3):
 	#print D
 	
 	print 'Metric matrix'
-	#d0 = D[0,:]
-	print np.mean(D**2, 1) - 1.0/N**2 * np.sum(np.triu(D, k=1)**2)
-	d0 = sqrt( np.mean(D**2, 1) - 1.0/N**2 * np.sum(np.triu(D, k=1)**2) )
+	d0 = D[0,:]
+	#print np.mean(D**2, 1) - 1.0/N**2 * np.sum(np.triu(D, k=1)**2)
+	#d0 = sqrt( np.mean(D**2, 1) - 1.0/N**2 * np.sum(np.triu(D, k=1)**2) )
+	
 	d0h, d0v = np.meshgrid(d0, d0)
 	G = (d0h**2 + d0v**2 - D**2) / 2
 	#print G
