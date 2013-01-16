@@ -56,7 +56,9 @@ type: opls_146
 	! Benzene H - 12 site.
 	template: [H [CR6 (C)(C)]]
 	
-# opls_147   12.01100  ; Naphthalene fusion C (C9)
+type: opls_147
+	! Naphthalene fusion C (C9)
+	template: [CR6 (CR6)(CR6)(CR6)]
 
 type: opls_148
 	! C: CH3, toluene
@@ -109,7 +111,7 @@ type: opls_166
 	template: [CR6 [O(H)](C)(C)]
 
 # sp2 carbons
-precedence: ((opls_166) (opls_145) (opls_141) (opls_142))
+precedence: ((opls_166) (opls_147) (opls_145) (opls_141) (opls_142))
 	
 type: opls_167
 	!O     phenol

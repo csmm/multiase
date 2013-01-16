@@ -99,8 +99,11 @@ def add_dihedral(fields, ffdata):
 		d = int(float(fields[-3]))
 		parameters = [K, n, d, 0]
 	elif fields[4] == '3':
-		# Ignore C0 (constant term)
-		parameters = [float(f) * kJmol for f in fields[6:]]
+		# C5 should be zero
+		if float(fields[10]) != 0:
+			print 'RB dihedral has an unsupported nonzero C5 coeff. Ignoring...'
+			return
+		parameters = [float(f) * kJmol for f in fields[5:10]]
 	else:
 		raise RuntimeError('Unsupported dihedral formula: %s' % fields[4])
 	ffdata.add('dihedral', type, 'Dihedral Coeffs', parameters)

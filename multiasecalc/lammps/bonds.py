@@ -69,7 +69,9 @@ class Bonds:
 	
 	
 	def __getitem__(self, i):
-		rows, cols = np.where(self.pairs == i)
+		hits = np.where(self.pairs == i)
+		if len(hits[0]) == 0: return []
+		rows, cols = hits
 		cols = 1 - cols
 		bonded = self.pairs[rows, cols]
 		return tuple(bonded)
@@ -80,7 +82,7 @@ class Bonds:
 			
 	def __len__(self):
 		return len(self.pairs)
-		
+	
 	def add(self, i, j):
 		self.pairs = np.append(self.pairs, np.array((i,j), ndmin=2), axis=0)
 		
@@ -93,7 +95,7 @@ class Bonds:
 	def get_bond_matrix(self):
 		matrix = np.zeros((self.len_atoms, self.len_atoms))
 		matrix[self.pairs[:,0], self.pairs[:,1]] = 1
-		return matrix
+		return matrix + matrix.T
 		
 	def atoms_extending(self, new_atoms):
 		if 'bonds' in new_atoms.info:

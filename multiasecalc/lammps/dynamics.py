@@ -20,7 +20,7 @@ class LAMMPSOptimizer(Dynamics):
 class LAMMPSMolecularDynamics(Dynamics):
 	""" Base class for molecular dynamics with LAMMPS. Requires a LAMMPS calculator. """
 	def __init__(self, atoms, timestep, integrator='verlet', trajectory=None,
-			traj_interval=1000, logfile=None, loginterval=100, constraints=[]):
+			traj_interval=1000, logfile=None, loginterval=100):
 		Dynamics.__init__(self, atoms, None, None)
 
 		self.dt = timestep
@@ -41,14 +41,13 @@ class LAMMPSMolecularDynamics(Dynamics):
 		
 		self.fix = None
 		self.cell_relaxed = False
-		self.constraints = constraints
 		
-	def run(self, steps=50):
+	def run(self, steps=50, constraints=[]):
 		self.nsteps = 0
 		fix = 'all '+self.fix
 		calc = self.atoms.calc
 		it = self.run_iterator(steps)
-		calc.molecular_dynamics(self.atoms, self.dt, fix, it, self.cell_relaxed, steps, self.constraints)
+		calc.molecular_dynamics(self.atoms, self.dt, fix, it, self.cell_relaxed, steps, constraints)
 		
 	def run_iterator(self, steps):
 		cur_step = 0
@@ -104,19 +103,32 @@ class LAMMPS_NPT(LAMMPSMolecularDynamics):
 		
 		if not ramp_to_temp: ramp_to_temp = temperature
 		
-		pvalues = '%f %f %f' % (pressure, pressure, p_damp)
-		
-		if atoms.pbc.all():
-			if isotropic:
-				coupling = 'iso'
-			elif (np.dot(atoms.cell, atoms.cell) == atoms.cell**2).all():
-				# orthogonal cell
-				coupling = 'aniso'
-			else:
-				coupling = 'tri'
-			args = '%s %s' % (coupling, pvalues)
+		if hasattr(pressure, 'shape'):
+			px, pxy, pxz = pressure[0,:]
+			py, pyz = pressure[1,1:]
+			pz = pressure[2,2]
+			p_diags = [px, py, pz]
+			args = ' '.join(['%s %f %f %f' % ('xyz'[i], p_diags[i], p_diags[i], p_damp) for i in range(3) if atoms.pbc[i]])
+			if atoms.pbc[0] and atoms.pbc[1]:
+				args += ' xy %f %f %f' % (pxy, pxy, p_damp)
+			if atoms.pbc[1] and atoms.pbc[2]:
+				args += ' yz %f %f %f' % (pyz, pyz, p_damp)
+			if atoms.pbc[1] and atoms.pbc[2]:
+				args += ' xz %f %f %f' % (pxz, pxz, p_damp)
 		else:
-			args = ' '.join(['%s %s' % ('xyz'[i], pvalues) for i in range(3) if atoms.pbc[i]])
+			pvalues = '%f %f %f' % (pressure, pressure, p_damp)
+		
+			if atoms.pbc.all():
+				if isotropic:
+					coupling = 'iso'
+				elif (np.dot(atoms.cell, atoms.cell) == atoms.cell**2).all():
+					# orthogonal cell
+					coupling = 'aniso'
+				else:
+					coupling = 'tri'
+				args = '%s %s' % (coupling, pvalues)
+			else:
+				args = ' '.join(['%s %s' % ('xyz'[i], pvalues) for i in range(3) if atoms.pbc[i]])
 				
 		self.fix = 'npt temp %f %f %f %s' %(temperature, ramp_to_temp, t_damp, args)
 		self.cell_relaxed = True
@@ -179,7 +191,7 @@ class LJWall:
 		
 		#if 'hi' in face:
 		#	self.offset = -abs(self.offset)
-	
+		
 	def get_commands(self, atoms):
 		ffdata = atoms.calc.ff_data
 		

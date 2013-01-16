@@ -1,5 +1,6 @@
 import re
 import numpy as np
+from bonds import Bonds
 
 #itertools.permutations not in python 2.4
 
@@ -53,8 +54,15 @@ class TypeResolver:
 			
 		self.templates = templates
 		self.precedences = precedences
+		
+		self.previous_atoms = None
 	
 	def resolve(self, atom):
+		atoms = atom.atoms
+		if atoms != self.previous_atoms or 'rings' not in atoms.info:
+			atoms.info['rings'] = self.find_rings(atoms)
+			self.previous_atoms = atoms.copy()
+		
 		matches = [temp for temp in self.templates if temp.match(atom)]
 		if not matches:
 			raise TypingError('Could not resolve type for atom %s' % atom)
@@ -71,6 +79,50 @@ class TypeResolver:
 		templates = [self.resolve(atom) for atom in atoms]
 		atoms.info['atom_types'] = [t.type for t in templates]
 		atoms.info['descriptions'] = [t.docstring for t in templates]
+		
+	
+	def find_rings(self, atoms):
+		ring_size_limit = 7
+		rings = []
+		ring_atoms = set()
+		ring_bonds = self.get_ring_bonds(atoms)
+		
+		def add_ring(chain):
+			rings.append(chain)
+			ring_atoms.update(chain)
+		
+		def recursive_finder(chain, next_atom):
+			if len(chain) > 2 and next_atom == chain[0]:
+				add_ring(chain)
+				return
+			
+			if next_atom in chain: return
+			if len(chain) + 1 > ring_size_limit: return
+			
+			for atom in ring_bonds[next_atom]:
+				recursive_finder(chain + [next_atom], atom)
+		
+		for atom in range(len(atoms)):
+			if not atom in ring_atoms:
+				recursive_finder([], atom)
+		
+		return rings
+		
+		
+	def get_ring_bonds(self, atoms):
+		''' Only take bonds that are a part of a ring '''
+		bm = atoms.info['bonds'].get_bond_matrix()
+		prev_ends = None
+		while True:
+			# Remove chain end bonds until only rings remain
+			sums = bm.sum(axis=0)
+			ends = np.where(sums < 2)[0]
+			if np.array_equal(ends, prev_ends): break
+			prev_ends  = ends
+			bm[:,ends] = 0
+			bm[ends,:] = 0
+			
+		return Bonds(atoms, zip(*np.where(np.triu(bm) > 0)))
 
 
 class Template:
@@ -174,28 +226,19 @@ class TemplateTree(Tree):
 		
 	def test_ring(self, atom):
 		atoms = atom.atoms
-		bonds = atoms.info['bonds']
 		conditions = self.ring_conditions
-		
-		def recursive_finder(chain, next_atom):
-			
-			if chain and next_atom == chain[0] and len(chain) in self.ringsize_range:
-				# Test conditions for atoms except the starting atom
-				for sequence in permutations(chain[1:], len(conditions)):
+		for ring in atoms.info['rings']:
+			if atom.index in ring and len(ring) in self.ringsize_range:
+				if len(conditions) == 0: return True
+				ring_copy = list(ring)
+				ring_copy.remove(atom.index)
+				# Test conditions for atoms except the current atom
+				for sequence in permutations(ring_copy, len(conditions)):
 					if np.all([c.match(atoms[ind]) for ind, c in zip(sequence, conditions)]):
 						return True
-				return False
-			
-			if next_atom in chain:
-				return False
-			if len(chain) + 1 > self.ringsize_range[-1]:
-				return False
-				
-			chain = chain + [next_atom]
-			return np.any([recursive_finder(chain, atom) for atom in bonds[next_atom]])
 		
-		return recursive_finder([], atom.index)
-
+		return False
+		
 		
 class PrecedenceTree(Tree):
 	def contains(self, template):
