@@ -74,7 +74,7 @@ class Bonds:
 		rows, cols = hits
 		cols = 1 - cols
 		bonded = self.pairs[rows, cols]
-		return tuple(bonded)
+		return list(bonded)
 		
 	def __iter__(self):
 		for pair in self.pairs:

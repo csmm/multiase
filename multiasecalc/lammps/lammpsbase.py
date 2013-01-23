@@ -339,7 +339,7 @@ class LAMMPSBase(Calculator):
 					
 				actual_indices, actual_type = ff_data.find(group, indices, type)
 				if actual_indices == None:
-					discarded_objects.add(type)
+					discarded_objects.add(actual_type)
 					continue
 				if group == 'improper' and ff_data.class2:
 					actual_indices = [actual_indices[1], actual_indices[0], actual_indices[2], actual_indices[3]]

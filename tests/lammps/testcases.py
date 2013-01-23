@@ -3,7 +3,6 @@ from multiasecalc.lammps import COMPASS, CHARMM, OPLSAA, ReaxFF
 from multiasecalc.lammps.amber import AMBER
 from multiasecalc.lammps.pcff import PCFF
 from multiasecalc.utils import get_datafile
-from scripts import charmm_charges
 import unittest
 import numpy as np
 

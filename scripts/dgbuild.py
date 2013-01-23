@@ -275,7 +275,7 @@ def build_PVA(N):
 	from multiasecalc.lammps.compass import COMPASS
 	from multiasecalc.lammps.dynamics import LAMMPSOptimizer
 	from multiasecalc.utils import get_datafile
-	mol.calc = COMPASS(ff_file_path=get_datafile('compass.frc'), pair_cutoff=15)
+	mol.calc = COMPASS(get_datafile('compass.frc'), parameters=dict(extra_cmds=['communicate single cutoff 80']), debug=True)
 	dyn = LAMMPSOptimizer(mol)
 	dyn.run()
 	

@@ -139,7 +139,7 @@ import QtQuick 1.1
 			 var dy = mouse.y - lasty;
 			 lastx = mouse.x;
 			 lasty = mouse.y;
-			 viewState.rotate(dx*sensivity, dy*sensivity)
+			 viewState.rotate(dx*sensivity, -dy*sensivity)
 		}
 	}
 	

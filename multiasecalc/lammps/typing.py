@@ -2,35 +2,19 @@ import re
 import numpy as np
 from bonds import Bonds
 
-#itertools.permutations not in python 2.4
-
 try:
-	from itertools import permutations
+	from itertools import product
 except:
-	def permutations(iterable, r=None):
-		# permutations('ABCD', 2) --> AB AC AD BA BC BD CA CB CD DA DB DC
-		# permutations(range(3)) --> 012 021 102 120 201 210
-		pool = tuple(iterable)
-		n = len(pool)
-		if r is None: r = n
-		if r > n:
-			return
-		indices = range(n)
-		cycles = range(n, n-r, -1)
-		yield tuple(pool[i] for i in indices[:r])
-		while n:
-			for i in reversed(range(r)):
-				cycles[i] -= 1
-				if cycles[i] == 0:
-					indices[i:] = indices[i+1:] + indices[i:i+1]
-					cycles[i] = n - i
-				else:
-					j = cycles[i]
-					indices[i], indices[-j] = indices[-j], indices[i]
-					yield tuple(pool[i] for i in indices[:r])
-					break
-			else:
-				return
+	#itertools.product is not in python 2.4
+	def product(*args, **kwds):
+		# product('ABCD', 'xy') --> Ax Ay Bx By Cx Cy Dx Dy
+		# product(range(2), repeat=3) --> 000 001 010 011 100 101 110 111
+		pools = map(tuple, args) * kwds.get('repeat', 1)
+		result = [[]]
+		for pool in pools:
+			result = [x+[y] for x in result for y in pool]
+		for prod in result:
+			yield tuple(prod)
             
 
 class SyntaxError(Exception): pass
@@ -42,6 +26,8 @@ class TypeResolver:
 		comment_exp = re.compile(r'\n\s*![^\n]\n')
 		type_exp = re.compile(r'type:\s*(\S+)\s*(![\w\W]*?)?\n\s*template:\s*(.+)\n')
 		precedence_exp = re.compile(r'precedence:\s*([\w\W]+?)\n\s*\n')
+		
+		typedata = re.sub(r'#.*\n', '\n', typedata) # remove comment lines
 		
 		templates = []
 		for match in type_exp.finditer(typedata):
@@ -99,7 +85,10 @@ class TypeResolver:
 			if next_atom in chain: return
 			if len(chain) + 1 > ring_size_limit: return
 			
-			for atom in ring_bonds[next_atom]:
+			neighbors = ring_bonds[next_atom]
+			if len(neighbors) > 3: return                   # ignore rings with sp3 carbons
+			
+			for atom in neighbors:
 				recursive_finder(chain + [next_atom], atom)
 		
 		for atom in range(len(atoms)):
@@ -208,21 +197,19 @@ class TemplateTree(Tree):
 		if (atom.symbol in self.elements) == self.invert: return False
 		
 		atoms = atom.atoms
-		bonded = [atoms[idx] for idx in atoms.info['bonds'][atom.index]]
+		bonded = atoms.info['bonds'][atom.index]
+		if parent_atom: bonded.remove(parent_atom.index)
+		nchildren = len(self.children)
 		
-		if parent_atom:
-			bonded = [a for a in bonded if a.index != parent_atom.index]
-		
-		if self.closed and len(bonded) != len(self.children):
+		if len(bonded) < nchildren or (self.closed and len(bonded) > nchildren):
 			return False
 		
-		if self.ring and not self.test_ring(atom):
+		if self.ring and self.test_ring(atom) == False:
 			return False
 			
-		for sequence in permutations(bonded, len(self.children)):
-			if np.all([ch.match(neigh, atom) for neigh, ch in zip(sequence, self.children)]):
-				return True
-		return False
+		if nchildren == 0: return True
+		
+		return self.find_matching_sequence(atoms, bonded, self.children, parent_atom=atom)
 		
 	def test_ring(self, atom):
 		atoms = atom.atoms
@@ -233,20 +220,29 @@ class TemplateTree(Tree):
 				ring_copy = list(ring)
 				ring_copy.remove(atom.index)
 				# Test conditions for atoms except the current atom
-				for sequence in permutations(ring_copy, len(conditions)):
-					if np.all([c.match(atoms[ind]) for ind, c in zip(sequence, conditions)]):
-						return True
+				return self.find_matching_sequence(atoms, ring_copy, conditions)
 		
+		return False
+		
+	def find_matching_sequence(self, atoms, atom_indices, testers, **tester_kwargs):
+		# Find a sequence in given atoms that matches the sequence of testers
+		matchings = []
+		for tester in testers:
+			matched = [i for i in atom_indices if tester.match(atoms[i], **tester_kwargs)]
+			if not matched: return False
+			matchings.append(matched)
+		for sequence in product(*matchings):
+			if len(set(sequence)) == len(testers): return True
 		return False
 		
 		
 class PrecedenceTree(Tree):
 	def contains(self, template):
 		return template.type == self.root or \
-				np.any([ch.contains(template) for ch in self.children])
+				True in (ch.contains(template) for ch in self.children)
 	
 	def contains_all(self, templates):
-		return np.all([self.contains(t) for t in templates])
+		return not False in (self.contains(t) for t in templates)
 	
 	def resolve(self, templates):
 		for ch in self.children:
