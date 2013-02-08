@@ -28,11 +28,11 @@ type: opls_138
 
 type: opls_140
 	! alkane H
-	template: [H [C (*)(*)(*)]]
+	template: [H [C (*)(CH)(CH)]]
 	
 type: opls_141
 	! alkene C (R2-C=) 
-	template: [C (^H)(^H)(^H)]
+	template: [C (^H)(^H)(C)]
 	
 type: opls_142
 	! alkene C (RH-C=) 
@@ -47,16 +47,19 @@ type: opls_144
 	template: [H [C(*)(*)]]
 
 type: opls_145
-	! Benzene C - 12 site JACS,112,4768-90. Use #145B for biphenyl
+	! Benzene C - 12 site JACS,112,4768-90
 	template: [CR6 (C)(C)(H)]
-	
+
+# This type doesn't make sense, it should not have a charge...
 # opls_145B  12.01100  ; Biphenyl C1
 
 type: opls_146
 	! Benzene H - 12 site.
 	template: [H [CR6 (C)(C)]]
 	
-# opls_147   12.01100  ; Naphthalene fusion C (C9)
+type: opls_147
+	! Naphthalene fusion C (C9)
+	template: [CR6 (CR6)(CR6)(CR6)]
 
 type: opls_148
 	! C: CH3, toluene
@@ -65,8 +68,14 @@ type: opls_148
 # hydrogens
 precedence: ((opls_146) (opls_144))
 
-# opls_149   12.01100  ; C: CH2, ethyl benzene
-# opls_150   12.01100  ; diene =CH-CH=; use #178 for =CR-CR=
+type: opls_149
+	! C: CH2, ethyl benzene
+	template: [C (CR6)[C(H)(H)(H)](H)]
+
+type: opls_150
+	! diene =CH-CH=; use #178 for =CR-CR=
+	template: [C (H)[C(*)(*)][C(C)(H)]]
+	
 # opls_151   35.45300  ; Cl in alkyl chlorides
 # opls_152   12.01100  ; RCH2Cl in alkyl chlorides
 # opls_153    1.00800  ; H in RCH2Cl in alkyl chlorides
@@ -82,8 +91,6 @@ type: opls_155
 type: opls_156
 	! all-atom H(C): methanol
 	template: [H [C[O(H)](H)(H)]]
-	
-precedence: ((opls_156) (opls_140))
 
 type: opls_157
 	! all-atom C: CH3 & CH2, alcohols
@@ -103,13 +110,18 @@ type: opls_159
 #opls_163    1.00800  ; HO  Trifluoroethanol
 #opls_164   18.99840  ; F   Trifluoroethanol
 #opls_165    1.00800  ; H   Trifluoroethanol
- 
+
 type: opls_166
 	! C(OH) phenol  Use with all
 	template: [CR6 [O(H)](C)(C)]
 
+	
 # sp2 carbons
-precedence: ((opls_166) (opls_145) (opls_141) (opls_142))
+precedence: (
+	(opls_166) (opls_147) (opls_145) # Aromatics
+	(opls_178) (opls_150)            # Dienes
+	(opls_141) (opls_142)            # Alkanes
+	)
 	
 type: opls_167
 	!O     phenol
@@ -125,25 +137,46 @@ type: opls_168
 	! H     phenol  
 	template: [H [O(CR6)]]
 
-"""
+# *** It is impossible to detect arbitrary polyols with the template syntax ***
+# opls_169   15.99940  ; O:    diols 
+# opls_170    1.00800  ; H(O): diols
+# opls_171   15.99940  ; O:    triols
+# opls_172    1.00800  ; H(O): triols
+# opls_173   12.01100  ; C(H2OH): triols
+# opls_174   12.01100  ; C(HROH): triols
+# opls_175   12.01100  ; C(R2OH): triols
+# opls_176    1.00800  ; H(CXOH): triols
+ 
+type: opls_178
+	! diene =CR-CR=; use #150 for =CH-CH=
+	template: [C (C)[C(*)(*)][C(C)(C)]]
 
-"""
- opls_169   15.99940  ; O:    diols 
- opls_170    1.00800  ; H(O): diols
- opls_171   15.99940  ; O:    triols
- opls_172    1.00800  ; H(O): triols
- opls_173   12.01100  ; C(H2OH): triols
- opls_174   12.01100  ; C(HROH): triols
- opls_175   12.01100  ; C(R2OH): triols
- opls_176    1.00800  ; H(CXOH): triols
- opls_178   12.01100  ; diene =CR-CR=; use #150 for =CH-CH=
- opls_179   15.99940  ; O: anisole
- opls_180   15.99940  ; O: dialkyl ether
- opls_181   12.01100  ; C(H3OR): methyl ether
- opls_182   12.01100  ; C(H2OR): ethyl  ether
- opls_183   12.01100  ; C(HOR):  i-Pr   ether, allose
- opls_184   12.01100  ; C(OR):   t-Bu   ether
+# opls_179   15.99940  ; O: anisole
+ 
+type: opls_180
+	! O: dialkyl ether
+	template: [O (C)(C)]
+
+type: opls_181
+	! C(H3OR): methyl ether
+	template: [C (O(C))(H)(H)(H)]
+	
+type: opls_182
+	! C(H2OR): ethyl  ether
+	template: [C (O(C))(C)(H)(H)]
+
+type: opls_183
+	! C(HOR):  i-Pr   ether, allose
+	template: [C (O(C))(C)(C)(H)]
+	
+type: opls_184
+	! C(OR):   t-Bu   ether
+	template: (C (O(C))(C)(C)(C))
  opls_185    1.00800  ; H(COR): alpha H ether
+ 
+ """
+ 
+"""
  opls_186   15.99940  ; O: acetal ether 
  opls_187   15.99940  ; O(H): hemiacetal
  opls_188    1.00800  ; H(O): hemiacetal

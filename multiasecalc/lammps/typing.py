@@ -1,35 +1,20 @@
 import re
 import numpy as np
-
-#itertools.permutations not in python 2.4
+from bonds import Bonds
 
 try:
-	from itertools import permutations
+	from itertools import product
 except:
-	def permutations(iterable, r=None):
-		# permutations('ABCD', 2) --> AB AC AD BA BC BD CA CB CD DA DB DC
-		# permutations(range(3)) --> 012 021 102 120 201 210
-		pool = tuple(iterable)
-		n = len(pool)
-		if r is None: r = n
-		if r > n:
-			return
-		indices = range(n)
-		cycles = range(n, n-r, -1)
-		yield tuple(pool[i] for i in indices[:r])
-		while n:
-			for i in reversed(range(r)):
-				cycles[i] -= 1
-				if cycles[i] == 0:
-					indices[i:] = indices[i+1:] + indices[i:i+1]
-					cycles[i] = n - i
-				else:
-					j = cycles[i]
-					indices[i], indices[-j] = indices[-j], indices[i]
-					yield tuple(pool[i] for i in indices[:r])
-					break
-			else:
-				return
+	#itertools.product is not in python 2.4
+	def product(*args, **kwds):
+		# product('ABCD', 'xy') --> Ax Ay Bx By Cx Cy Dx Dy
+		# product(range(2), repeat=3) --> 000 001 010 011 100 101 110 111
+		pools = map(tuple, args) * kwds.get('repeat', 1)
+		result = [[]]
+		for pool in pools:
+			result = [x+[y] for x in result for y in pool]
+		for prod in result:
+			yield tuple(prod)
             
 
 class SyntaxError(Exception): pass
@@ -42,6 +27,8 @@ class TypeResolver:
 		type_exp = re.compile(r'type:\s*(\S+)\s*(![\w\W]*?)?\n\s*template:\s*(.+)\n')
 		precedence_exp = re.compile(r'precedence:\s*([\w\W]+?)\n\s*\n')
 		
+		typedata = re.sub(r'#.*\n', '\n', typedata) # remove comment lines
+		
 		templates = []
 		for match in type_exp.finditer(typedata):
 			type, doc, exp = match.groups()
@@ -53,8 +40,15 @@ class TypeResolver:
 			
 		self.templates = templates
 		self.precedences = precedences
+		
+		self.previous_atoms = None
 	
 	def resolve(self, atom):
+		atoms = atom.atoms
+		if atoms != self.previous_atoms or 'rings' not in atoms.info:
+			atoms.info['rings'] = self.find_rings(atoms)
+			self.previous_atoms = atoms.copy()
+		
 		matches = [temp for temp in self.templates if temp.match(atom)]
 		if not matches:
 			raise TypingError('Could not resolve type for atom %s' % atom)
@@ -71,6 +65,53 @@ class TypeResolver:
 		templates = [self.resolve(atom) for atom in atoms]
 		atoms.info['atom_types'] = [t.type for t in templates]
 		atoms.info['descriptions'] = [t.docstring for t in templates]
+		
+	
+	def find_rings(self, atoms):
+		ring_size_limit = 7
+		rings = []
+		ring_atoms = set()
+		ring_bonds = self.get_ring_bonds(atoms)
+		
+		def add_ring(chain):
+			rings.append(chain)
+			ring_atoms.update(chain)
+		
+		def recursive_finder(chain, next_atom):
+			if len(chain) > 2 and next_atom == chain[0]:
+				add_ring(chain)
+				return
+			
+			if next_atom in chain: return
+			if len(chain) + 1 > ring_size_limit: return
+			
+			neighbors = ring_bonds[next_atom]
+			if len(neighbors) > 3: return                   # ignore rings with sp3 carbons
+			
+			for atom in neighbors:
+				recursive_finder(chain + [next_atom], atom)
+		
+		for atom in range(len(atoms)):
+			if not atom in ring_atoms:
+				recursive_finder([], atom)
+		
+		return rings
+		
+		
+	def get_ring_bonds(self, atoms):
+		''' Only take bonds that are a part of a ring '''
+		bm = atoms.info['bonds'].get_bond_matrix()
+		prev_ends = None
+		while True:
+			# Remove chain end bonds until only rings remain
+			sums = bm.sum(axis=0)
+			ends = np.where(sums < 2)[0]
+			if np.array_equal(ends, prev_ends): break
+			prev_ends  = ends
+			bm[:,ends] = 0
+			bm[ends,:] = 0
+			
+		return Bonds(atoms, zip(*np.where(np.triu(bm) > 0)))
 
 
 class Template:
@@ -156,54 +197,52 @@ class TemplateTree(Tree):
 		if (atom.symbol in self.elements) == self.invert: return False
 		
 		atoms = atom.atoms
-		bonded = [atoms[idx] for idx in atoms.info['bonds'][atom.index]]
+		bonded = atoms.info['bonds'][atom.index]
+		if parent_atom: bonded.remove(parent_atom.index)
+		nchildren = len(self.children)
 		
-		if parent_atom:
-			bonded = [a for a in bonded if a.index != parent_atom.index]
-		
-		if self.closed and len(bonded) != len(self.children):
+		if len(bonded) < nchildren or (self.closed and len(bonded) > nchildren):
 			return False
 		
-		if self.ring and not self.test_ring(atom):
+		if self.ring and self.test_ring(atom) == False:
 			return False
 			
-		for sequence in permutations(bonded, len(self.children)):
-			if np.all([ch.match(neigh, atom) for neigh, ch in zip(sequence, self.children)]):
-				return True
-		return False
+		if nchildren == 0: return True
+		
+		return self.find_matching_sequence(atoms, bonded, self.children, parent_atom=atom)
 		
 	def test_ring(self, atom):
 		atoms = atom.atoms
-		bonds = atoms.info['bonds']
 		conditions = self.ring_conditions
+		for ring in atoms.info['rings']:
+			if atom.index in ring and len(ring) in self.ringsize_range:
+				if len(conditions) == 0: return True
+				ring_copy = list(ring)
+				ring_copy.remove(atom.index)
+				# Test conditions for atoms except the current atom
+				return self.find_matching_sequence(atoms, ring_copy, conditions)
 		
-		def recursive_finder(chain, next_atom):
-			
-			if chain and next_atom == chain[0] and len(chain) in self.ringsize_range:
-				# Test conditions for atoms except the starting atom
-				for sequence in permutations(chain[1:], len(conditions)):
-					if np.all([c.match(atoms[ind]) for ind, c in zip(sequence, conditions)]):
-						return True
-				return False
-			
-			if next_atom in chain:
-				return False
-			if len(chain) + 1 > self.ringsize_range[-1]:
-				return False
-				
-			chain = chain + [next_atom]
-			return np.any([recursive_finder(chain, atom) for atom in bonds[next_atom]])
+		return False
 		
-		return recursive_finder([], atom.index)
-
+	def find_matching_sequence(self, atoms, atom_indices, testers, **tester_kwargs):
+		# Find a sequence in given atoms that matches the sequence of testers
+		matchings = []
+		for tester in testers:
+			matched = [i for i in atom_indices if tester.match(atoms[i], **tester_kwargs)]
+			if not matched: return False
+			matchings.append(matched)
+		for sequence in product(*matchings):
+			if len(set(sequence)) == len(testers): return True
+		return False
+		
 		
 class PrecedenceTree(Tree):
 	def contains(self, template):
 		return template.type == self.root or \
-				np.any([ch.contains(template) for ch in self.children])
+				True in (ch.contains(template) for ch in self.children)
 	
 	def contains_all(self, templates):
-		return np.all([self.contains(t) for t in templates])
+		return not False in (self.contains(t) for t in templates)
 	
 	def resolve(self, templates):
 		for ch in self.children:

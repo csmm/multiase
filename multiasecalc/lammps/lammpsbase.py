@@ -99,7 +99,7 @@ class LAMMPSData:
 class LAMMPSBase(Calculator):
 
 	def __init__(self, label='lammps', tmp_dir=None, parameters={}, 
-		     update_charges = False, lammps_command=None,
+		     update_charges=False, lammps_command=None, force_triclinic=False,
 		     keep_alive=False, debug=False,
 		     output_hack=False):
 		"""The LAMMPS calculators object """
@@ -112,6 +112,7 @@ class LAMMPSBase(Calculator):
 		self.atoms = None
 		self.atoms_after_last_calc = None
 		self.update_charges = update_charges
+		self.force_triclinic = force_triclinic
 		self.keep_alive = keep_alive
 		self.debug = debug           
 		self.lammps_process = LammpsProcess(log=debug, lammps_command=lammps_command, output_hack=output_hack)
@@ -254,13 +255,14 @@ class LAMMPSBase(Calculator):
 			inv_cell = np.linalg.inv(atoms.cell)
 			frac_positions = np.dot(inv_cell, atoms.positions.T)
 			if np.any(frac_positions < 0) or np.any(frac_positions > 1):
-				atoms.center(vacuum=0)
+				atoms.center(vacuum=1)
 
 		self.atoms = atoms
 		self.prism = Prism(self.atoms.cell)
 		self.prepare_data()
 		self.prepare_calculation(self.atoms, self.data)
 		self.write_lammps_input()
+		if self.debug: print 'Calculation initialized.'
 		self.calls += 1
 	
 	def close_calculation(self):
@@ -304,10 +306,23 @@ class LAMMPSBase(Calculator):
 		tables = []
 		ff_data = self.ff_data
 		
-		if not 'bonds' in atoms.info:
-			atoms.info['bonds'] = Bonds(atoms, autodetect=True)
+		def status_message(msg):
+			if not self.debug: return
+			print msg,
+			sys.stdout.flush()
+			
+		def status_done():
+			if not self.debug: return
+			print 'Done.'
 		
+		if not 'bonds' in atoms.info:
+			status_message('Detecting bonds...')
+			atoms.info['bonds'] = Bonds(atoms, autodetect=True)
+			status_done()
+		
+		status_message('Detecting atom types...')
 		atom_types = self.atom_types(atoms)
+		status_done()
 		atom_typeorder = list(set(atom_types))
 		atom_actualtypes = [ff_data.get_actual_type('atom', tp) for tp in atom_types]
 		atom_actualtype_order = [ff_data.get_actual_type('atom', tp) for tp in atom_typeorder]
@@ -324,7 +339,7 @@ class LAMMPSBase(Calculator):
 					
 				actual_indices, actual_type = ff_data.find(group, indices, type)
 				if actual_indices == None:
-					discarded_objects.add(type)
+					discarded_objects.add(actual_type)
 					continue
 				if group == 'improper' and ff_data.class2:
 					actual_indices = [actual_indices[1], actual_indices[0], actual_indices[2], actual_indices[3]]
@@ -332,14 +347,29 @@ class LAMMPSBase(Calculator):
 				
 			if self.debug:
 				for tp in discarded_objects:
-					print 'No parameters for %s. Skipping.' % type
+					print 'No parameters for %s. Skipping.' % tp
 			return result
 		
 		b = atoms.info['bonds']
-		bonds     = identify_objects(b, 'bond')
-		angles    = identify_objects(b.find_angles(), 'angle')
-		dihedrals = identify_objects(b.find_dihedrals(), 'dihedral')
-		impropers = identify_objects(b.find_impropers(), 'improper')
+		parameters = self.parameters
+		if parameters.bond_style:    
+			bonds     = identify_objects(b, 'bond')
+		else: bonds = []
+		if parameters.angle_style:
+			status_message('Detecting angles...')
+			angles    = identify_objects(b.find_angles(), 'angle')
+			status_done()
+		else: angles = []
+		if parameters.dihedral_style:
+			status_message('Detecting dihedrals...')
+			dihedrals = identify_objects(b.find_dihedrals(), 'dihedral')
+			status_done()
+		else: dihedrals = []
+		if parameters.improper_style:
+			status_message('Detecting impropers...')
+			impropers = identify_objects(b.find_impropers(), 'improper')
+			status_done()
+		else: impropers = []
 		
 		
 		# Coeffs	
@@ -449,7 +479,7 @@ class LAMMPSBase(Calculator):
 		
 		pbc = self.atoms.get_pbc()
 		f.write('units %s \n' % parameters.units)
-		f.write('boundary %s %s %s \n' % tuple('sp'[int(x)] for x in pbc))
+		f.write('boundary %s %s %s \n' % tuple('mp'[int(x)] for x in pbc))
 		if parameters.neighbor:
 			f.write('neighbor %s \n' % (parameters.neighbor))
 		if parameters.newton:
@@ -532,7 +562,7 @@ class LAMMPSBase(Calculator):
 		f.write('0.0 %f  ylo yhi\n' % yhi)
 		f.write('0.0 %f  zlo zhi\n' % zhi)
 		
-		if self.prism.is_skewed():
+		if self.force_triclinic or self.prism.is_skewed():
 			f.write('%f %f %f  xy xz yz\n' % (xy, xz, yz))
 		f.write('\n\n')
 		
@@ -667,9 +697,12 @@ class LammpsProcess:
 			#self.outlog = NamedTemporaryFile(prefix='log_'+filelabel, dir=tmp_dir, delete=False)
 			self.inlog  = open(os.path.join(tmp_dir, 'in_'+filelabel), 'w')
 			self.outlog = open(os.path.join(tmp_dir, 'out_'+filelabel), 'w')
-			
-		return Popen(lammps_cmd_line,
+		
+		try:
+			return Popen(lammps_cmd_line,
 							cwd=tmp_dir, stdin=PIPE, stdout=PIPE, stderr=sys.stderr)
+		except OSError as e:
+			raise RuntimeError('Unable to run LAMMPS, please check LAMMPS_COMMAND. Error message: %s.' % e.strerror)
 	
 	def start(self, tmp_dir, filelabel=''):
 		if self.running(): self.terminate()

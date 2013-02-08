@@ -39,14 +39,14 @@ class FFData:
 				return ind, tp
 		
 		if group in ('atom', 'bond', 'angle'): 
-			return None, None
+			return None, actualtype
 		
 		# Test for wildcard types like * c c *
 		for ind, tp in actualtype.variations(indices):
 			for key in groupdict:
 				if key.match(tp):
 					return ind, key
-		return None, None
+		return None, actualtype
 		
 	def get_params(self, group, type):
 		groupdict = getattr(self, group)
