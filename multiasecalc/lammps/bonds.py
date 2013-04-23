@@ -51,7 +51,21 @@ class Bonds:
 			
 	def detect(self, atoms, tolerance):
 		frac_coords = atoms.get_scaled_positions()
+		covradii = np.array([covalent_radii[n] for n in atoms.numbers])
 		
+		pairs = []
+		for i in range(len(atoms)-1):
+		  bondvectors = frac_coords[i+1:] - frac_coords[i]
+		  bondvectors -= atoms.pbc * np.round(bondvectors)
+		  dist_sq = (np.dot(bondvectors, atoms.cell)**2).sum(axis=1)
+		  R1 = covradii[i]
+		  R2 = covradii[i+1:]
+		  bonded = np.where(dist_sq < ((R1+R2)*tolerance)**2)[0]
+		  for j in bonded:
+			  pairs.append((i,i+1+j))
+			  
+		self.pairs = np.array(pairs)
+		"""
 		distances_sq = np.zeros((len(atoms), len(atoms)))
 		for dim in range(3):
 			X2, X1 = np.meshgrid(frac_coords[:,dim], frac_coords[:,dim])
@@ -66,6 +80,7 @@ class Bonds:
 		bonded = ((R1+R2)*tolerance)**2 > distances_sq
 		bonded = np.triu(bonded, 1)
 		self.pairs = np.array(np.where(bonded)).T
+		"""
 	
 	
 	def __getitem__(self, i):
